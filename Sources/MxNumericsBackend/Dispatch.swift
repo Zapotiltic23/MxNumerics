@@ -1,23 +1,64 @@
+//
+//  Dispatch.swift
+//  MxNumerics
+//
+//  Created by Alexandro Sanchez on 6/9/26.
+//
 import MxNumericsCore
 
+/// Controls backend selection.
 public enum BackendPolicy: Sendable, Equatable {
+    /// Lets the router choose a backend from scalar type, operation, size, and availability.
     case auto
+
+    /// Routes eligible operations to Accelerate.
     case forceAccelerate
+
+    /// Routes eligible operations to MLX.
     case forceMLX
+
+    /// Routes operations to the portable Swift reference implementation.
     case forceReference
 }
 
+/// The result of a backend routing decision.
 public struct DispatchDecision: Sendable, Equatable {
+    /// The selected backend.
     public let backend: BackendID
+
+    /// A short explanation of why the backend was selected.
     public let reason: String
 }
 
+/// Chooses a backend for a primitive operation.
+///
+/// The router encodes the package's numerical policy. Double precision and
+/// factorization routines prefer Accelerate, because LAPACK-style CPU kernels
+/// are the reference path for those operations. Large single-precision GEMM can
+/// be routed to MLX when GPU support is available. Deterministic mode overrides
+/// the automatic policy and forces the CPU reference path chosen for regression
+/// stability.
 public struct BackendRouter: Sendable {
+    /// The explicit backend policy.
     public var policy: BackendPolicy
+
+    /// A Boolean value that forces deterministic CPU routing when true.
     public var deterministicMode: Bool
+
+    /// A Boolean value indicating whether the MLX backend reports GPU availability.
     public var gpuAvailable: Bool
+
+    /// The minimum result element count for routing Float GEMM to MLX in auto mode.
     public var gpuGemmElementThreshold: Int
 
+    /// Creates a backend router.
+    ///
+    /// - Parameters:
+    ///   - policy: The backend policy.
+    ///   - deterministicMode: Whether to force deterministic CPU routing.
+    ///   - gpuAvailable: Whether GPU-backed MLX routing is available.
+    ///   - gpuGemmElementThreshold: The minimum result element count for
+    ///     auto-routing Float GEMM to MLX.
     public init(
         policy: BackendPolicy = .auto,
         deterministicMode: Bool = false,
@@ -30,6 +71,14 @@ public struct BackendRouter: Sendable {
         self.gpuGemmElementThreshold = gpuGemmElementThreshold
     }
 
+    /// Chooses a backend for an operation.
+    ///
+    /// - Parameters:
+    ///   - op: The primitive operation.
+    ///   - scalar: The scalar type stored in the operands.
+    ///   - rows: The operation's representative row count.
+    ///   - columns: The operation's representative column count.
+    /// - Returns: The backend decision and the reason for it.
     public func choose<S: MatrixScalar>(
         op: BackendOperation,
         scalar: S.Type,

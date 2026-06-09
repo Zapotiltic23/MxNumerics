@@ -1,5 +1,12 @@
 // swift-tools-version: 6.2
 
+//
+//  Package.swift
+//  MxNumerics
+//
+//  Created by Alexandro Sanchez on 6/9/26.
+//
+
 import PackageDescription
 
 let package = Package(
