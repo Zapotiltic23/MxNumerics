@@ -55,6 +55,7 @@ let package = Package(
                 "MxNumericsBackend",
                 "MxNumericsAccelerate",
                 "MxNumericsMLX",
+                .product(name: "ComplexModule", package: "swift-numerics"),
             ],
             swiftSettings: swift6Settings
         ),

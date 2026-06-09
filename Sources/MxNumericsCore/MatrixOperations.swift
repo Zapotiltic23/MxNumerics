@@ -118,3 +118,7 @@ infix operator ^^: MultiplicationPrecedence
 public func ^^ <S: MatrixScalar>(lhs: Matrix<S>, rhs: Int) -> Matrix<S> {
     lhs.power(rhs)
 }
+
+public func ^ <S: MatrixScalar>(lhs: Matrix<S>, rhs: Int) -> Matrix<S> {
+    lhs.power(rhs)
+}

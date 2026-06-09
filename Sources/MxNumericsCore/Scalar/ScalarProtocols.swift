@@ -6,6 +6,7 @@
 //
 import ComplexModule
 import Foundation
+import RealModule
 
 /// A scalar that can be stored in a matrix.
 ///
@@ -37,7 +38,7 @@ public protocol FloatingScalar: MatrixScalar where Magnitude: RealFloatingScalar
 ///
 /// The protocol gathers the elementary operations that the core algorithms need
 /// without exposing backend-specific LAPACK or MLX types.
-public protocol RealFloatingScalar: FloatingScalar, BinaryFloatingPoint
+public protocol RealFloatingScalar: FloatingScalar, BinaryFloatingPoint, Real
 where Magnitude == Self {
     /// Returns the principal square root of `x`.
     static func sqrt(_ x: Self) -> Self

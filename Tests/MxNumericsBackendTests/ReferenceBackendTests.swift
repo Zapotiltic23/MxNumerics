@@ -22,8 +22,17 @@ struct ReferenceBackendTests {
             [11, 12],
         ])
 
-        let result = try await ReferenceBackend().gemm(BufferRef(a), BufferRef(b)).matrix()
+        let aRef = BufferRef(a)
+        let bRef = BufferRef(b)
+        let productRef = try await ReferenceBackend().gemm(aRef, bRef)
+        let result = productRef.matrix()
 
+        #expect(a.rows == 2)
+        #expect(a.columns == 3)
+        #expect(aRef.rows == 2)
+        #expect(aRef.columns == 3)
+        #expect(productRef.rows == 2)
+        #expect(productRef.columns == 2)
         #expect(result.rowMajorElements() == [58, 64, 139, 154])
     }
 

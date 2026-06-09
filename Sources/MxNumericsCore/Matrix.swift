@@ -21,6 +21,7 @@ public struct Matrix<Scalar: MatrixScalar>: Sendable {
     var strides: Strides
     var offset: Int
     var buffer: MatrixBuffer<Scalar>
+    public internal(set) var residency: StorageResidency
 
     /// The number of matrix rows.
     public var rows: Int { shape.rows }
@@ -47,6 +48,15 @@ public struct Matrix<Scalar: MatrixScalar>: Sendable {
         self.strides = Strides(row: columns, column: 1)
         self.offset = 0
         self.buffer = MatrixBuffer(Array(repeating: value, count: rows * columns))
+        self.residency = .host
+    }
+
+    /// Creates a matrix by repeating a scalar value.
+    ///
+    /// This initializer is a MATLAB-style spelling of
+    /// ``init(rows:columns:repeating:)``.
+    public init(rows: Int, cols: Int, repeating value: Scalar = .zero) {
+        self.init(rows: rows, columns: cols, repeating: value)
     }
 
     /// Creates a matrix from row-major storage.
@@ -70,6 +80,16 @@ public struct Matrix<Scalar: MatrixScalar>: Sendable {
         self.strides = Strides(row: columns, column: 1)
         self.offset = 0
         self.buffer = MatrixBuffer(elements)
+        self.residency = .host
+    }
+
+    /// Creates a matrix from row-major storage and a shape.
+    ///
+    /// - Parameters:
+    ///   - elements: Scalar entries in row-major order.
+    ///   - shape: The matrix shape.
+    public init(rowMajor elements: [Scalar], shape: Shape) throws {
+        try self.init(rowMajor: elements, rows: shape.rows, columns: shape.columns)
     }
 
     /// Creates a matrix from nested row arrays.
@@ -85,6 +105,7 @@ public struct Matrix<Scalar: MatrixScalar>: Sendable {
         self.strides = Strides(row: columnCount, column: 1)
         self.offset = 0
         self.buffer = MatrixBuffer(rows.flatMap { $0 })
+        self.residency = .host
     }
 
     /// Creates a matrix filled with zeros.
@@ -224,7 +245,7 @@ public struct Matrix<Scalar: MatrixScalar>: Sendable {
     /// original entry `(j, i)`. This property swaps strides and shares storage;
     /// it does not immediately copy scalar values.
     public var t: Matrix {
-        Matrix(shape: try! Shape(rows: columns, columns: rows), strides: Strides(row: strides.column, column: strides.row), offset: offset, buffer: buffer)
+        Matrix(shape: try! Shape(rows: columns, columns: rows), strides: Strides(row: strides.column, column: strides.row), offset: offset, buffer: buffer, residency: residency)
     }
 
     /// The transpose view of the matrix.
@@ -273,12 +294,39 @@ public struct Matrix<Scalar: MatrixScalar>: Sendable {
         self.strides = strides
         self.offset = offset
         self.buffer = buffer
+        self.residency = .host
+    }
+
+    init(shape: Shape, strides: Strides, offset: Int, buffer: MatrixBuffer<Scalar>, residency: StorageResidency) {
+        self.shape = shape
+        self.strides = strides
+        self.offset = offset
+        self.buffer = buffer
+        self.residency = residency
+    }
+
+    public mutating func markHostResident() {
+        residency = .host
+    }
+
+    public mutating func markDeviceResident() {
+        residency = .device
+    }
+
+    public mutating func markHostAndDeviceResident() {
+        residency = .both
     }
 }
 
 extension Matrix: Equatable where Scalar: Equatable {
     public static func == (lhs: Matrix, rhs: Matrix) -> Bool {
         lhs.shape == rhs.shape && lhs.rowMajorElements() == rhs.rowMajorElements()
+    }
+}
+
+extension Matrix: ExpressibleByArrayLiteral {
+    public init(arrayLiteral elements: [Scalar]...) {
+        try! self.init(elements)
     }
 }
 
