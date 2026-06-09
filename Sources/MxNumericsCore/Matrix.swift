@@ -266,6 +266,26 @@ public struct Matrix<Scalar: MatrixScalar>: Sendable {
         return result
     }
 
+    /// Calls a closure with a contiguous logical row-major buffer.
+    ///
+    /// Contiguous, offset-zero matrices borrow their backing storage directly.
+    /// Strided views, including transposes, are materialized into a temporary
+    /// row-major buffer for the duration of the call.
+    public func withUnsafeRowMajor<R>(
+        _ body: (UnsafeBufferPointer<Scalar>, _ rows: Int, _ columns: Int) throws -> R
+    ) rethrows -> R {
+        if offset == 0 && strides.row == columns && strides.column == 1 {
+            return try buffer.elements.withUnsafeBufferPointer { pointer in
+                try body(pointer, rows, columns)
+            }
+        }
+
+        let elements = rowMajorElements()
+        return try elements.withUnsafeBufferPointer { pointer in
+            try body(pointer, rows, columns)
+        }
+    }
+
     mutating func ensureUnique() {
         if !isKnownUniquelyReferenced(&buffer) {
             buffer = buffer.copy()
@@ -362,9 +382,9 @@ extension Matrix where Scalar: FloatingScalar {
     ///
     /// The Frobenius norm is `sqrt(sum(abs(a_ij)^2))`. This implementation uses
     /// a direct sum of squared magnitudes, which is mathematically correct for
-    /// ordinary inputs but is not yet the scaled BLAS `nrm2` algorithm planned
-    /// for backend kernels. Extremely large or small entries can therefore
-    /// overflow or underflow in the intermediate sum.
+    /// ordinary inputs. Use the umbrella `norm(_:_:)` routine when you want the
+    /// Accelerate-backed scaled norm path for supported real floating-point
+    /// scalars.
     public var frobeniusNorm: Scalar.Magnitude {
         var sum = Scalar.Magnitude.zero
         for value in rowMajorElements() {

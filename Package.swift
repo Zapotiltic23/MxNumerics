@@ -40,6 +40,7 @@ let package = Package(
         .target(
             name: "MxNumericsAccelerate",
             dependencies: ["MxNumericsCore", "MxNumericsBackend"],
+            cSettings: accelerateCSettings,
             swiftSettings: swift6Settings,
             linkerSettings: [.linkedFramework("Accelerate")]
         ),
@@ -66,7 +67,7 @@ let package = Package(
         ),
         .testTarget(
             name: "MxNumericsBackendTests",
-            dependencies: ["MxNumericsBackend"],
+            dependencies: ["MxNumericsBackend", "MxNumericsAccelerate"],
             swiftSettings: swift6Settings
         ),
         .testTarget(
@@ -84,4 +85,8 @@ let swift6Settings: [SwiftSetting] = [
     .enableUpcomingFeature("MemberImportVisibility"),
     .enableUpcomingFeature("InferSendableFromCaptures"),
     .enableExperimentalFeature("StrictConcurrency"),
+]
+
+let accelerateCSettings: [CSetting] = [
+    .define("ACCELERATE_NEW_LAPACK"),
 ]

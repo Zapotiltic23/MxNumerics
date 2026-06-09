@@ -50,6 +50,15 @@ public struct Vector<Scalar: MatrixScalar>: Sendable, Equatable where Scalar: Eq
     public func asColumnMatrix() -> Matrix<Scalar> {
         matrix
     }
+
+    /// Calls a closure with contiguous vector storage.
+    public func withUnsafeValues<R>(
+        _ body: (UnsafeBufferPointer<Scalar>) throws -> R
+    ) rethrows -> R {
+        try matrix.withUnsafeRowMajor { pointer, _, _ in
+            try body(pointer)
+        }
+    }
 }
 
 extension Vector where Scalar: FloatingScalar {
@@ -73,10 +82,10 @@ extension Vector where Scalar: FloatingScalar {
 
     /// The Euclidean 2-norm of the vector.
     ///
-    /// The norm is `sqrt(sum(abs(x_i)^2))`. This implementation uses a direct
-    /// sum of squared magnitudes, so it can overflow or underflow for extreme
-    /// inputs. A backend-scaled `nrm2` implementation is planned for production
-    /// kernels.
+    /// The norm is `sqrt(sum(abs(x_i)^2))`. This core-only implementation uses
+    /// a direct sum of squared magnitudes. Use the umbrella `norm(_:_:)`
+    /// routine when you want the Accelerate-backed `nrm2` path for supported
+    /// real floating-point scalars.
     public var norm: Scalar.Magnitude {
         var sum = Scalar.Magnitude.zero
         for index in 0..<count {

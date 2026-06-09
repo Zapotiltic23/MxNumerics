@@ -4,11 +4,11 @@ MxNumerics is a Swift 6 numerical linear algebra framework for Apple platforms.
 It provides MATLAB-style dense matrix and vector ergonomics on top of a layered
 architecture designed for Accelerate, MLX, and portable Swift reference kernels.
 
-The package currently implements the full public routine catalog described in
-the development plan as Swift reference algorithms, plus backend routing hooks
-for future tuned Accelerate and MLX kernels. In other words: the API surface and
-mathematical routines are present and tested, while backend-specialized
-performance work remains isolated behind the backend targets.
+The package implements the full public routine catalog described in the
+development plan and now routes the high-value real floating-point routines
+through Accelerate. `Double` and `Float` use BLAS, vDSP, and LAPACK where
+available; `Float16` promotes through `Float` for these kernels; unsupported
+scalar paths remain on the portable Swift reference implementations.
 
 ## Package Status
 
@@ -19,7 +19,7 @@ performance work remains isolated behind the backend targets.
 - **Scalar support:** `Double`, `Float`, `Float16`, `Complex<Double>`, `Complex<Float>` where routines permit them
 - **Indexing:** zero-based, with both `A[i, j]` and `A[i][j]`
 - **Storage:** dense row-major storage with copy-on-write value semantics
-- **Current kernels:** Swift reference implementations with backend dispatch infrastructure
+- **Current kernels:** Accelerate BLAS/vDSP/LAPACK for real floating-point hot paths, Swift reference fallbacks for unsupported scalars
 
 ## Installation
 
@@ -130,9 +130,10 @@ Current policy:
 - The portable `ReferenceBackend` is used as a correctness path.
 - `deterministicMode` forces CPU-oriented routing decisions for reproducibility.
 
-The implemented high-level numerical catalog currently uses Swift reference
-algorithms. This makes the API usable and testable today, while preserving the
-backend boundary for future tuned BLAS/LAPACK/MLX kernels.
+The implemented high-level numerical catalog calls the synchronous Accelerate
+kernel layer for supported real floating-point work. The in-core arithmetic
+operators remain portable reference implementations so `MxNumericsCore` does
+not depend on Accelerate.
 
 ## Numerical Accuracy Notes
 
@@ -140,23 +141,21 @@ MxNumerics favors stable routines where the API name implies production use, but
 some educational or compatibility routines are intentionally exposed with
 caveats:
 
-- `solveSystemPLU` uses pivoted LU for square systems.
-- `qr(_:)` uses Householder reflectors.
+- `solveSystemPLU` uses LAPACK `getrf`/`getrs` for `Double` and `Float`,
+  with `Float16` promoted through `Float`.
+- `qr(_:)` uses LAPACK `geqrf`/`orgqr` for supported real floating-point
+  scalars and returns an economy QR factorization.
 - `gramSchmidtFactorization(_:mode:)` defaults to modified Gram-Schmidt.
-- `solveSystemOrdinaryLeastSquares` intentionally implements normal equations:
-  \[
-  x = (A^T A)^{-1}A^T b
-  \]
-  This squares the condition number and is less stable than QR/SVD least squares.
+- `solveSystemOrdinaryLeastSquares` uses LAPACK `gels` for supported real
+  floating-point scalars, avoiding normal equations on the accelerated path.
 - `characteristicPolynomialRoots(_:)` is included for completeness, but matrix
   \(\rightarrow\) polynomial \(\rightarrow\) roots is generally ill-conditioned.
   Prefer `eigenValuesVectors(_:)` for eigenvalues.
-- `singularValueDecomposition(_:)` currently computes a reference SVD through
-  an eigen decomposition of \(A^T A\). This is useful for coverage, but a tuned
-  LAPACK-backed SVD is the desired production kernel.
-- `Matrix.frobeniusNorm` and `Vector.norm` currently use direct sums of squared
-  magnitudes. Extreme values can overflow or underflow before the final square
-  root. A scaled BLAS `nrm2` path is planned.
+- `singularValueDecomposition(_:)` uses LAPACK `gesdd` on the accelerated path,
+  avoiding the older \(A^T A\) reference algorithm for `Double` and `Float`.
+- Public `norm` routines use LAPACK `lange` and BLAS `nrm2`/`asum` on the
+  accelerated path. The low-level `Matrix.frobeniusNorm` and `Vector.norm`
+  properties remain portable direct-sum reference helpers.
 
 ## Examples
 
@@ -238,9 +237,10 @@ The spectral radius is:
 
 ## Implemented Routine Table
 
-The table below lists the public routines implemented in the package. “Reference”
-means the routine is implemented in Swift today, not yet as a tuned backend
-kernel.
+The table below lists the public routines implemented in the package. “Accelerate”
+means the umbrella routine calls BLAS, vDSP, or LAPACK for `Double` and `Float`;
+`Float16` promotes through `Float` for these paths. “Reference” means the
+routine remains implemented in portable Swift.
 
 ### Matrix Construction, Access, and Structure
 
@@ -278,20 +278,20 @@ kernel.
 |---|---|---|
 | `+`, `-` for matrices | \(C_{ij}=A_{ij}\pm B_{ij}\) | Equal shapes |
 | `+`, `-` with scalar | \(C_{ij}=A_{ij}\pm c\) | Broadcast scalar |
-| `*` matrix-matrix | \(C_{ij}=\sum_k A_{ik}B_{kj}\) | Reference GEMM |
+| `*` matrix-matrix | \(C_{ij}=\sum_k A_{ik}B_{kj}\) | Core reference GEMM |
 | `*` scalar-matrix | \(C_{ij}=cA_{ij}\) | Scalar broadcast |
 | `/` matrix-scalar | \(C_{ij}=A_{ij}/c\) | Floating scalars |
 | `/` matrix-matrix | \(A/B=(B^T\backslash A^T)^T\) | Right solve |
-| `hadamard(_:_:)` | \(C_{ij}=A_{ij}B_{ij}\) | Elementwise product |
-| `elementwiseDivide(_:_:)` | \(C_{ij}=A_{ij}/B_{ij}\) | Elementwise quotient |
+| `hadamard(_:_:)` | \(C_{ij}=A_{ij}B_{ij}\) | Accelerate vDSP for D/F/F16 |
+| `elementwiseDivide(_:_:)` | \(C_{ij}=A_{ij}/B_{ij}\) | Accelerate vDSP for D/F/F16 |
 | `dividePwMatrix(_:_:)` | \(A ./ B\) | Alias |
-| `multiply(_:_:)` | \(AB\) | Function spelling |
+| `multiply(_:_:)` | \(AB\) | Accelerate CBLAS GEMM for D/F/F16 |
 | `constantMatrixMultiplication(_:_:)` | \(cA\) | Alias |
-| `multiplyConstantMatrix(_:_:)` | \(Ac\) | Alias |
+| `multiplyConstantMatrix(_:_:)` | \(Ac\) | vDSP scalar multiply for D/F/F16 |
 | `divideConstantMatrix(_:_:)` | \(A/c\) | Alias |
 | `multiplyAddInPlace(_:_:into:)` | \(C \leftarrow C + AB\) | Reference update |
 | `powerMatrix(_:_:)`, `^`, `^^` | \(A^k\) | Repeated squaring, \(k\ge0\) |
-| `sum(_:)` | \(\sum_{ij} A_{ij}\) | Generic scalar sum |
+| `sum(_:)` | \(\sum_{ij} A_{ij}\) | vDSP reduction for D/F/F16 |
 | `trace(_:)`, `Matrix.trace` | \(\operatorname{tr}(A)=\sum_i A_{ii}\) | Square matrix |
 | `absMatrix(_:)` | \(B_{ij}=|A_{ij}|\) | Uses scalar magnitude |
 | `swapElements(_:_:_:)` | swaps two array entries | Utility |
@@ -304,15 +304,15 @@ kernel.
 
 | API | Formula / behavior | Notes |
 |---|---|---|
-| `norm(_: .one)` | \(\max_j\sum_i |a_{ij}|\) | Matrix 1-norm |
-| `norm(_: .infinity)` | \(\max_i\sum_j |a_{ij}|\) | Matrix infinity norm |
-| `norm(_: .frobenius)` | \(\sqrt{\sum_{ij}|a_{ij}|^2}\) | Direct sum |
-| `norm(_: .two)` | \(\sigma_{\max}(A)\) | Via SVD |
-| `norm(_: VectorNorm.two)` | \(\sqrt{\sum_i |x_i|^2}\) | Direct sum |
-| `conditionNumber(_:)` | \(\kappa_2(A)=\sigma_{\max}/\sigma_{\min}\) | Via SVD |
-| `rank(_:tolerance:)` | \(\#\{\sigma_i>\tau\}\) | SVD threshold |
+| `norm(_: .one)` | \(\max_j\sum_i |a_{ij}|\) | LAPACK `lange` for D/F/F16 |
+| `norm(_: .infinity)` | \(\max_i\sum_j |a_{ij}|\) | LAPACK `lange` for D/F/F16 |
+| `norm(_: .frobenius)` | \(\sqrt{\sum_{ij}|a_{ij}|^2}\) | LAPACK scaled `lange` for D/F/F16 |
+| `norm(_: .two)` | \(\sigma_{\max}(A)\) | LAPACK `gesdd` SVD for D/F/F16 |
+| `norm(_: VectorNorm.two)` | \(\sqrt{\sum_i |x_i|^2}\) | BLAS `nrm2` for D/F/F16 |
+| `conditionNumber(_:)` | \(\kappa_2(A)=\sigma_{\max}/\sigma_{\min}\) | LAPACK `gesdd` for D/F/F16 |
+| `rank(_:tolerance:)` | \(\#\{\sigma_i>\tau\}\) | LAPACK SVD threshold for D/F/F16 |
 | `nullity(_:tolerance:)` | \(n-\operatorname{rank}(A)\) | Rank-nullity |
-| `fundamentalSubspaces(_:tolerance:)` | column, row, null, left-null bases | SVD-based |
+| `fundamentalSubspaces(_:tolerance:)` | column, row, null, left-null bases | Full LAPACK SVD for D/F/F16 |
 | `fundemantalSubspaces(_:tolerance:)` | same as above | Deprecated typo-compatible alias |
 
 ### QR and Orthogonalization
@@ -320,7 +320,7 @@ kernel.
 | API | Formula / behavior | Notes |
 |---|---|---|
 | `householderVector(_:)` | \(H=I-\beta vv^T\) | Stable sign choice |
-| `qr(_:)`, `Matrix.qr()` | \(A=QR\) | Householder reference QR |
+| `qr(_:)`, `Matrix.qr()` | \(A=QR\) | LAPACK `geqrf`/`orgqr` for D/F/F16 |
 | `gramSchmidtFactorization(_:mode:)` | \(A=QR\) | Modified or classical GS |
 | `gramSmchmidtFactorization(_:)` | \(A=QR\) | Typo-compatible alias |
 | `isOrthogonal(_:)` | \(\|Q^TQ-I\|\le\tau\) | Tolerance-based |
@@ -331,13 +331,13 @@ kernel.
 | API | Formula / behavior | Notes |
 |---|---|---|
 | `luDecompositionDoolittle(_:)` | \(A=LU\) | Unpivoted; educational |
-| `luWithScaledRowPivoting(_:)` | \(PA=LU\) | Scaled partial pivoting |
-| `croutsLUwithPartialImplicitPivoting(_:)` | \(PA=LU\) | Delegates to scaled pivoting |
-| `solveSystemPLU(_:_:)`, `Matrix.solve(_:)` | solves \(Ax=b\) | Pivoted LU |
+| `luWithScaledRowPivoting(_:)` | \(PA=LU\) | LAPACK `getrf` for D/F/F16 |
+| `croutsLUwithPartialImplicitPivoting(_:)` | \(PA=LU\) | Delegates to accelerated pivoted LU |
+| `solveSystemPLU(_:_:)`, `Matrix.solve(_:)` | solves \(Ax=b\) | LAPACK `getrf`/`getrs` for D/F/F16 |
 | `solveVectorInverseLU(_:_:)` | solves \(Ax=b\) | Alias |
-| `solveMatrixInverseLU(_:_:)` | solves \(AX=B\) | Multiple RHS |
-| `determinant(_:)`, `Matrix.determinant()` | \(\det(A)=\operatorname{sgn}(P)\prod_i U_{ii}\) | LU-based |
-| `inverse(_:)`, `Matrix.inverse` | \(A^{-1}\) | Solves against identity |
+| `solveMatrixInverseLU(_:_:)` | solves \(AX=B\) | LAPACK multi-RHS solve for D/F/F16 |
+| `determinant(_:)`, `Matrix.determinant()` | \(\det(A)=\operatorname{sgn}(P)\prod_i U_{ii}\) | LAPACK `getrf` for D/F/F16 |
+| `inverse(_:)`, `Matrix.inverse` | \(A^{-1}\) | LAPACK `getrf`/`getri` for D/F/F16 |
 | `inverseLU(_:)` | \(A^{-1}\) | Alias |
 | `adjoint(_:)` | \(\operatorname{adj}(A)=\det(A)A^{-1}\) | Requires nonsingular matrix |
 
@@ -345,7 +345,7 @@ kernel.
 
 | API | Formula / behavior | Notes |
 |---|---|---|
-| `choleskyDecomposition(_:)`, `Matrix.cholesky()` | \(A=LL^T\) | SPD matrices |
+| `choleskyDecomposition(_:)`, `Matrix.cholesky()` | \(A=LL^T\) | LAPACK `potrf` for D/F/F16 |
 | `isPositiveDefinite(_:)` | Cholesky succeeds | Numerical predicate |
 | `isCholesky(_:of:)` | \(\|LL^T-A\|\le\tau\) | Tolerance-based |
 
@@ -353,19 +353,19 @@ kernel.
 
 | API | Formula / behavior | Notes |
 |---|---|---|
-| `singularValueDecomposition(_:)`, `Matrix.svd()` | \(A=U\Sigma V^T\) | Reference via \(A^TA\) |
+| `singularValueDecomposition(_:)`, `Matrix.svd()` | \(A=U\Sigma V^T\) | LAPACK `gesdd` for D/F/F16 |
 | `reorderSVD(_:)` | \(\sigma_1\ge\sigma_2\ge\cdots\) | Reorders columns |
 | `pseudoInverseMoorePenrose(_:tolerance:)` | \(A^+=V\Sigma^+U^T\) | SVD-based |
 | `solveSystemPseudoInverse(_:_:)` | \(x=A^+b\) | Minimum-norm LS style solve |
-| `solveSystemOrdinaryLeastSquares(_:_:)` | \(x=(A^TA)^{-1}A^Tb\) | Normal equations caveat |
-| `solveSystemIterativelyReweightedLeastSquares` | repeated weighted normal equations | Robust/weighted LS reference |
+| `solveSystemOrdinaryLeastSquares(_:_:)` | \(\min_x\|Ax-b\|_2\) | LAPACK `gels` for D/F/F16 |
+| `solveSystemIterativelyReweightedLeastSquares` | repeated weighted least squares | Uses accelerated OLS inner solve where supported |
 
 ### Eigenvalues, Schur, Hessenberg, and Characteristic Polynomial
 
 | API | Formula / behavior | Notes |
 |---|---|---|
 | `jacobiEigen(_:maxIterations:tolerance:)` | \(A=VDV^T\) for symmetric \(A\) | Jacobi rotations |
-| `balanceMatrix(_:radix:)` | \(B=D^{-1}AD\) | Power-of-radix scaling |
+| `balanceMatrix(_:radix:)` | \(B=D^{-1}AD\) | LAPACK `gebal` for D/F/F16 |
 | `upperHessenberg(_:)` | \(H=Q^TAQ\) | Householder reduction |
 | `francisQRStep(_:)` | one shifted QR-style step | Educational reference |
 | `qrAlgorithmBasic(_:iterations:)` | \(A_{k+1}=R_kQ_k\) | Unshifted QR iteration |
@@ -374,7 +374,7 @@ kernel.
 | `realSchurFormDecomposition(_:iterations:)` | \(A\approx QTQ^T\) | Accumulates Q |
 | `similarityTransformsRealSchurForm(_:iterations:)` | same as Schur decomposition | Alias |
 | `eigenPairsRealSchurWithExceptionalShift` | Schur/eigen driver | Reference alias |
-| `eigenValuesVectors(_:iterations:)`, `Matrix.eig()` | eigenvalues, symmetric vectors when available | Jacobi for symmetric |
+| `eigenValuesVectors(_:iterations:)`, `Matrix.eig()` | eigenvalues and right eigenvectors | LAPACK `syev`/`geev` for D/F/F16 |
 | `powerMethod(_:maxIterations:tolerance:)` | dominant eigenpair | \(v_{k+1}=Av_k/\|Av_k\|\) |
 | `shiftedInversePM(_:shift:maxIterations:tolerance:)` | inverse iteration near shift | Solves \((A-\mu I)y=x\) |
 | `spectralRadius(_:)` | \(\rho(A)=\max_i|\lambda_i|\) | Eigenvalue-based |
@@ -421,11 +421,11 @@ kernel.
 |---|---|---|
 | `+`, `-` for vectors | \(x\pm y\) | Equal lengths |
 | `*` scalar-vector | \(cx\) | Scalar broadcast |
-| `innerProduct(_:_:)` for real vectors | \(x^Ty\) | Dot product |
+| `innerProduct(_:_:)` for real vectors | \(x^Ty\) | BLAS dot for D/F/F16 |
 | `crossProductVector(_:_:)` | \(x\times y\) | 3D only |
 | `angleBetweenVectors(_:_:)` | \(\arccos\frac{x^Ty}{\|x\|\|y\|}\) | Clamped cosine |
 | `orthogonalProjectionUontoV(_:_:)` | \(\frac{u^Tv}{v^Tv}v\) | Projection onto \(v\) |
-| `meanOfVector(_:)` | \(\frac1n\sum_i x_i\) | Nonempty vector |
+| `meanOfVector(_:)` | \(\frac1n\sum_i x_i\) | vDSP mean for D/F/F16 |
 | `vectorCorrelation(_:_:)` | Pearson correlation | Centered normalized dot |
 
 ### Polynomial and Miscellaneous Routines
@@ -470,17 +470,23 @@ swift package dump-symbol-graph
 ```
 
 Current test coverage includes construction, COW behavior, indexing, matrix
-multiplication, backend routing, QR reconstruction, LU solve/determinant/inverse,
-Cholesky, SVD reconstruction, eigenvalues, iterative solvers, polynomial
-routines, complex helpers, and a catalog smoke test that touches the Section 6
-API surface.
+multiplication, backend routing, direct Accelerate GEMM, column-major bridge
+round-trips, LAPACK LU/solve/inverse/QR/Cholesky/SVD/eigen/least-squares smoke
+tests, QR reconstruction, LU solve/determinant/inverse, Cholesky, SVD
+reconstruction, eigenvalues, iterative solvers, polynomial routines, complex
+helpers, and a catalog smoke test that touches the Section 6 API surface.
+
+Current Apple SDKs still emit deprecation warnings for the Fortran-style LAPACK
+spellings when SwiftPM does not pass `ACCELERATE_NEW_LAPACK` through the Swift
+Clang importer. The wrappers intentionally use a local 32-bit `LAPACKInteger`
+ABI to match the imported Accelerate symbols reliably.
 
 ## Roadmap
 
-The next engineering step is backend specialization:
+The next engineering step is broadening specialized coverage:
 
-1. Replace reference GEMM with typed CBLAS row-major calls for `Float` and `Double`.
-2. Add LAPACK shims for LU, QR, Cholesky, SVD, and eigen drivers.
+1. Add complex BLAS/LAPACK routes for `Complex<Double>` and `Complex<Float>`.
+2. Route iterative solver inner loops through `gemv`, `dot`, `axpy`, and `scal`.
 3. Add MLX residency-backed Float/Float16 bulk kernels.
 4. Expand golden fixtures against NumPy/SciPy, MATLAB, and Accelerate.
 5. Add performance benchmarks and backend crossing diagnostics.

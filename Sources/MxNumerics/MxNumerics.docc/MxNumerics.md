@@ -8,8 +8,8 @@ MxNumerics provides value-type dense matrices, dense vectors, numerical routine
 families, and backend routing infrastructure for Apple platforms. The package
 implements row-major matrix storage, copy-on-write value semantics, zero-based
 indexing, matrix construction, slicing, transposition, arithmetic, integer
-powers, vector dot products, Euclidean norms, an async reference GEMM backend,
-and the numerical routine catalog from the development plan.
+powers, vector dot products, Euclidean norms, an async backend boundary, and the
+numerical routine catalog from the development plan.
 
 The framework uses the following numerical conventions:
 
@@ -18,19 +18,25 @@ The framework uses the following numerical conventions:
 - The standard matrix product `A * B` computes `C[i, j] = sum(A[i, k] * B[k, j])`.
 - Vector ``Vector/dot(_:)`` currently computes the unconjugated bilinear product
   `x^T y`. Complex Hermitian products should be implemented explicitly as `x^H y`.
-- ``Matrix/frobeniusNorm`` and ``Vector/norm`` currently use direct sums of
-  squared magnitudes. This is mathematically correct for ordinary inputs but is
-  not yet the scaled BLAS `nrm2` algorithm used to reduce overflow and underflow
-  risk for extreme data.
+- Public ``norm(_:_:)`` routines use Accelerate for supported real
+  floating-point scalars. Low-level ``Matrix/frobeniusNorm`` and
+  ``Vector/norm`` remain portable direct-sum helpers.
 - ``MxNumerics/deterministicMode`` forces CPU routing decisions for regression
   stability.
 
 The backend layer is intentionally separated from the public matrix API.
 ``ReferenceBackend`` is a portable correctness backend. ``AccelerateBackend`` is
-the CPU integration point for BLAS/LAPACK shims. ``MLXBackend`` is the GPU
-integration point for Float and Float16 bulk kernels. The current routine
-catalog uses Swift reference algorithms for broad correctness coverage while
-leaving backend-specialized kernels isolated behind the backend targets.
+the CPU integration point for BLAS/LAPACK/vDSP shims. ``MLXBackend`` is the GPU
+integration point for Float and Float16 bulk kernels. The umbrella routine
+catalog calls synchronous Accelerate kernels for `Double` and `Float`, promotes
+`Float16` through `Float` where appropriate, and keeps Swift reference fallbacks
+for unsupported scalar families.
+
+The Accelerate target uses row-major CBLAS/vDSP calls and a centralized
+column-major LAPACK bridge. Current Apple SDKs may still report deprecation
+warnings for Fortran-style LAPACK spellings when SwiftPM does not pass
+`ACCELERATE_NEW_LAPACK` through the Swift Clang importer; the wrappers use a
+local 32-bit LAPACK integer ABI to match the imported symbols reliably.
 
 ## Topics
 
@@ -142,9 +148,10 @@ leaving backend-specialized kernels isolated behind the backend targets.
 
 ## Numerical References
 
-The current API documentation follows the standard BLAS/LAPACK terminology for
-GEMM, vector 2-norms, and matrix factorizations, and uses the platform `hypot`
-routine for stable two-component Euclidean lengths.
+The API documentation follows the standard BLAS/LAPACK terminology for GEMM,
+vector 2-norms, matrix factorizations, singular values, and eigenvalue
+decompositions, and uses the platform `hypot` routine for stable two-component
+Euclidean lengths.
 
 - BLAS quick reference, Netlib LAPACK Users' Guide.
 - LAPACK QR and orthogonal/unitary-factor routine groups, Netlib LAPACK.

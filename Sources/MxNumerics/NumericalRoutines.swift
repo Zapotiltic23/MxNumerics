@@ -7,6 +7,7 @@
 
 import ComplexModule
 import Foundation
+import MxNumericsAccelerate
 
 public enum MatrixNorm: Sendable {
     case one
@@ -183,11 +184,17 @@ public func - <S: MatrixScalar>(lhs: Matrix<S>, rhs: S) -> Matrix<S> {
 }
 
 public func hadamard<S: MatrixScalar>(_ lhs: Matrix<S>, _ rhs: Matrix<S>) -> Matrix<S> {
+    if let accelerated: Matrix<S> = try? acceleratedHadamard(lhs, rhs) {
+        return accelerated
+    }
     precondition(lhs.shape == rhs.shape, "Hadamard product requires equal shapes.")
     return try! Matrix(rowMajor: zip(lhs.rowMajorElements(), rhs.rowMajorElements()).map(*), rows: lhs.rows, columns: lhs.columns)
 }
 
 public func elementwiseDivide<S: FloatingScalar>(_ lhs: Matrix<S>, _ rhs: Matrix<S>) -> Matrix<S> {
+    if let accelerated: Matrix<S> = try? acceleratedElementwiseDivide(lhs, rhs) {
+        return accelerated
+    }
     precondition(lhs.shape == rhs.shape, "Elementwise division requires equal shapes.")
     return try! Matrix(rowMajor: zip(lhs.rowMajorElements(), rhs.rowMajorElements()).map(/), rows: lhs.rows, columns: lhs.columns)
 }
@@ -205,7 +212,10 @@ public func absMatrix<S: FloatingScalar>(_ matrix: Matrix<S>) -> Matrix<S.Magnit
 }
 
 public func sum<S: MatrixScalar>(_ matrix: Matrix<S>) -> S {
-    matrix.rowMajorElements().reduce(.zero, +)
+    if let accelerated: S = acceleratedSum(matrix) {
+        return accelerated
+    }
+    return matrix.rowMajorElements().reduce(.zero, +)
 }
 
 public func trace<S: FloatingScalar>(_ matrix: Matrix<S>) -> S {
@@ -221,7 +231,10 @@ public func constantMatrixMultiplication<S: MatrixScalar>(_ scalar: S, _ matrix:
 }
 
 public func multiplyConstantMatrix<S: MatrixScalar>(_ matrix: Matrix<S>, _ scalar: S) -> Matrix<S> {
-    matrix * scalar
+    if let accelerated: Matrix<S> = try? acceleratedScalarMultiply(matrix, scalar) {
+        return accelerated
+    }
+    return matrix * scalar
 }
 
 public func divideConstantMatrix<S: FloatingScalar>(_ matrix: Matrix<S>, _ scalar: S) -> Matrix<S> {
@@ -229,7 +242,10 @@ public func divideConstantMatrix<S: FloatingScalar>(_ matrix: Matrix<S>, _ scala
 }
 
 public func multiply<S: MatrixScalar>(_ lhs: Matrix<S>, _ rhs: Matrix<S>) -> Matrix<S> {
-    lhs * rhs
+    if let accelerated: Matrix<S> = try? acceleratedGemm(lhs, rhs) {
+        return accelerated
+    }
+    return lhs * rhs
 }
 
 public func multiplyAddInPlace<S: MatrixScalar>(_ a: Matrix<S>, _ b: Matrix<S>, into c: inout Matrix<S>) {
@@ -319,6 +335,9 @@ public func principalMinors<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -
 public func norm<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ kind: MatrixNorm = .frobenius) -> S {
     switch kind {
     case .one:
+        if let accelerated: S = acceleratedMatrixNorm(matrix, kind) {
+            return accelerated
+        }
         var best = S.zero
         for j in 0..<matrix.columns {
             var total = S.zero
@@ -327,6 +346,9 @@ public func norm<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ kind: MatrixNorm 
         }
         return best
     case .infinity:
+        if let accelerated: S = acceleratedMatrixNorm(matrix, kind) {
+            return accelerated
+        }
         var best = S.zero
         for i in 0..<matrix.rows {
             var total = S.zero
@@ -335,6 +357,9 @@ public func norm<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ kind: MatrixNorm 
         }
         return best
     case .frobenius:
+        if let accelerated: S = acceleratedMatrixNorm(matrix, kind) ?? acceleratedFrobeniusNorm(matrix) {
+            return accelerated
+        }
         return matrix.frobeniusNorm
     case .two:
         return singularValueDecomposition(matrix).singularValues[0]
@@ -344,8 +369,14 @@ public func norm<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ kind: MatrixNorm 
 public func norm<S: RealFloatingScalar>(_ vector: Vector<S>, _ kind: VectorNorm = .two) -> S {
     switch kind {
     case .one:
+        if let accelerated: S = acceleratedVectorASum(vector) {
+            return accelerated
+        }
         return (0..<vector.count).reduce(S.zero) { $0 + S.abs(vector[$1]) }
     case .two:
+        if let accelerated: S = acceleratedVectorNorm(vector) {
+            return accelerated
+        }
         return vector.norm
     case .infinity:
         return (0..<vector.count).reduce(S.zero) { max($0, S.abs(vector[$1])) }
@@ -409,7 +440,10 @@ private func qrRoutine<S: RealFloatingScalar>(_ matrix: Matrix<S>) -> QRDecompos
 }
 
 public func qr<S: RealFloatingScalar>(_ matrix: Matrix<S>) -> QRDecomposition<S> {
-    qrRoutine(matrix)
+    if let accelerated: QRDecomposition<S> = try? acceleratedQR(matrix) {
+        return accelerated
+    }
+    return qrRoutine(matrix)
 }
 
 public func gramSchmidtFactorization<S: RealFloatingScalar>(
@@ -465,6 +499,9 @@ public func luDecompositionDoolittle<S: RealFloatingScalar>(_ matrix: Matrix<S>)
 
 public func luWithScaledRowPivoting<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> LUDecomposition<S> {
     guard matrix.isSquare else { throw LinAlgError.notSquare }
+    if let accelerated: LUDecomposition<S> = try acceleratedLU(matrix) {
+        return accelerated
+    }
     let n = matrix.rows
     var a = matrix
     var permutation = Array(0..<n)
@@ -522,6 +559,9 @@ public func croutsLUwithPartialImplicitPivoting<S: RealFloatingScalar>(_ matrix:
 }
 
 public func solveSystemPLU<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ b: Vector<S>) throws -> Vector<S> {
+    if let accelerated: Vector<S> = try acceleratedSolve(matrix, b) {
+        return accelerated
+    }
     let lu = try luWithScaledRowPivoting(matrix)
     return try solve(lu: lu, b)
 }
@@ -532,6 +572,9 @@ public func solveVectorInverseLU<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ b
 
 public func solveMatrixInverseLU<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ b: Matrix<S>) throws -> Matrix<S> {
     precondition(matrix.rows == b.rows, "Solve requires A.rows == B.rows.")
+    if let accelerated: Matrix<S> = try acceleratedSolve(matrix, b) {
+        return accelerated
+    }
     var columns: [[S]] = []
     for j in 0..<b.columns {
         let solution = try solveSystemPLU(matrix, getMatrixColumn(b, j))
@@ -541,6 +584,9 @@ public func solveMatrixInverseLU<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ b
 }
 
 private func determinantRoutine<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> S {
+    if let accelerated: S = try acceleratedDeterminant(matrix) {
+        return accelerated
+    }
     let lu = try luWithScaledRowPivoting(matrix)
     var det = S(lu.parity)
     for i in 0..<matrix.rows {
@@ -555,6 +601,9 @@ public func determinant<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> S 
 
 private func inverseRoutine<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> Matrix<S> {
     guard matrix.isSquare else { throw LinAlgError.notSquare }
+    if let accelerated: Matrix<S> = try acceleratedInverse(matrix) {
+        return accelerated
+    }
     let n = matrix.rows
     var columns: [[S]] = []
     for i in 0..<n {
@@ -576,6 +625,9 @@ public func inverseLU<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> Matr
 
 public func choleskyDecomposition<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> CholeskyDecomposition<S> {
     guard matrix.isSquare else { throw LinAlgError.notSquare }
+    if let accelerated: CholeskyDecomposition<S> = try acceleratedCholesky(matrix) {
+        return accelerated
+    }
     let n = matrix.rows
     var lower = Matrix<S>.zeros(n, n)
 
@@ -608,6 +660,9 @@ public func isCholesky<S: RealFloatingScalar>(_ factor: Matrix<S>, of matrix: Ma
 }
 
 public func singularValueDecomposition<S: RealFloatingScalar>(_ matrix: Matrix<S>) -> SVDDecomposition<S> {
+    if let accelerated: SVDDecomposition<S> = try? acceleratedSVD(matrix) {
+        return accelerated
+    }
     let ata = matrix.t * matrix
     let eigen = jacobiEigen(ata)
     let pairs = eigen.values.enumerated().map { index, value in
@@ -688,12 +743,18 @@ public func solveSystemPseudoInverse<S: RealFloatingScalar>(_ matrix: Matrix<S>,
 }
 
 public func solveSystemOrdinaryLeastSquares<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ b: Vector<S>) throws -> Vector<S> {
+    if let accelerated: Vector<S> = try acceleratedLeastSquares(matrix, b) {
+        return accelerated
+    }
     let normal = matrix.t * matrix
     let rhs = matrix.t * b.asColumnMatrix()
     return try solveSystemPLU(normal, Vector(rhs.rowMajorElements()))
 }
 
 public func fundamentalSubspaces<S: RealFloatingScalar>(_ matrix: Matrix<S>, tolerance: S? = nil) -> FundamentalSubspaces<S> {
+    if let accelerated: FundamentalSubspaces<S> = try? acceleratedFundamentalSubspaces(matrix, tolerance: tolerance) {
+        return accelerated
+    }
     let svd = singularValueDecomposition(matrix)
     let maxSigma = svd.singularValues.count == 0 ? S.zero : svd.singularValues[0]
     let tol = tolerance ?? S(max(matrix.rows, matrix.columns)) * S.tolerance * maxSigma
@@ -773,6 +834,9 @@ public func jacobiEigen<S: RealFloatingScalar>(_ matrix: Matrix<S>, maxIteration
 
 public func balanceMatrix<S: RealFloatingScalar>(_ matrix: Matrix<S>, radix: S = S(2)) -> (balanced: Matrix<S>, scales: Vector<S>) {
     precondition(matrix.isSquare, "Balancing requires a square matrix.")
+    if radix == S(2), let accelerated: (balanced: Matrix<S>, scales: Vector<S>) = try? acceleratedBalance(matrix) {
+        return accelerated
+    }
     let n = matrix.rows
     var balanced = matrix
     var scales = Array(repeating: S.one, count: n)
@@ -897,6 +961,9 @@ public func eigenPairsRealSchurWithExceptionalShift<S: RealFloatingScalar>(_ mat
 
 public func eigenValuesVectors<S: RealFloatingScalar>(_ matrix: Matrix<S>, iterations: Int = 200) -> EigenDecomposition<S> {
     precondition(matrix.isSquare, "Eigen decomposition requires a square matrix.")
+    if let accelerated: EigenDecomposition<S> = try? acceleratedEigen(matrix) {
+        return accelerated
+    }
     if isSymmetric(matrix, tolerance: S.tolerance * S(100)) {
         return jacobiEigen(matrix, maxIterations: iterations)
     }
@@ -1298,7 +1365,10 @@ public func * <S: MatrixScalar>(lhs: Vector<S>, rhs: S) -> Vector<S> {
 }
 
 public func innerProduct<S: RealFloatingScalar>(_ lhs: Vector<S>, _ rhs: Vector<S>) -> S {
-    lhs.dot(rhs)
+    if let accelerated: S = try? acceleratedDot(lhs, rhs) {
+        return accelerated
+    }
+    return lhs.dot(rhs)
 }
 
 public func innerProduct<R: RealFloatingScalar>(_ lhs: Vector<Complex<R>>, _ rhs: Vector<Complex<R>>) -> Complex<R> {
@@ -1334,6 +1404,9 @@ public func orthogonalProjectionUontoV<S: RealFloatingScalar>(_ u: Vector<S>, _ 
 
 public func meanOfVector<S: RealFloatingScalar>(_ vector: Vector<S>) -> S {
     precondition(vector.count > 0, "Mean requires a nonempty vector.")
+    if let accelerated: S = acceleratedMean(vector) {
+        return accelerated
+    }
     return (0..<vector.count).reduce(S.zero) { $0 + vector[$1] } / S(vector.count)
 }
 
@@ -1606,6 +1679,619 @@ private func solve<S: RealFloatingScalar>(lu: LUDecomposition<S>, _ b: Vector<S>
 
 private func residualNorm<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ x: Vector<S>, _ b: Vector<S>) -> S {
     norm(Vector((matrix * x.asColumnMatrix()).rowMajorElements()) - b)
+}
+
+private enum AcceleratedElementwiseOperation {
+    case multiply
+    case divide
+}
+
+private func acceleratedHadamard<S: MatrixScalar>(_ lhs: Matrix<S>, _ rhs: Matrix<S>) throws -> Matrix<S>? {
+    try acceleratedElementwise(lhs, rhs, operation: .multiply)
+}
+
+private func acceleratedElementwiseDivide<S: FloatingScalar>(_ lhs: Matrix<S>, _ rhs: Matrix<S>) throws -> Matrix<S>? {
+    try acceleratedElementwise(lhs, rhs, operation: .divide)
+}
+
+private func acceleratedElementwise<S: MatrixScalar>(
+    _ lhs: Matrix<S>,
+    _ rhs: Matrix<S>,
+    operation: AcceleratedElementwiseOperation
+) throws -> Matrix<S>? {
+    if S.self == Double.self {
+        let left = try doubleMatrix(lhs)
+        let right = try doubleMatrix(rhs)
+        let result = switch operation {
+        case .multiply: try VDSPKernels.multiply(left, right)
+        case .divide: try VDSPKernels.divide(left, right)
+        }
+        return try castDoubleMatrix(result, as: S.self)
+    }
+
+    if S.self == Float.self {
+        let left = try floatMatrix(lhs)
+        let right = try floatMatrix(rhs)
+        let result = switch operation {
+        case .multiply: try VDSPKernels.multiply(left, right)
+        case .divide: try VDSPKernels.divide(left, right)
+        }
+        return try castFloatMatrix(result, as: S.self)
+    }
+
+    if S.self == Float16.self {
+        let left = try promotedFloatMatrix(lhs)
+        let right = try promotedFloatMatrix(rhs)
+        let result = switch operation {
+        case .multiply: try VDSPKernels.multiply(left, right)
+        case .divide: try VDSPKernels.divide(left, right)
+        }
+        return try demotedFloat16Matrix(result, as: S.self)
+    }
+
+    return nil
+}
+
+private func acceleratedSum<S: MatrixScalar>(_ matrix: Matrix<S>) -> S? {
+    if S.self == Double.self {
+        return VDSPKernels.sum(try! doubleMatrix(matrix)) as? S
+    }
+
+    if S.self == Float.self {
+        return VDSPKernels.sum(try! floatMatrix(matrix)) as? S
+    }
+
+    if S.self == Float16.self {
+        let result = VDSPKernels.sum(try! promotedFloatMatrix(matrix))
+        return Float16(result) as? S
+    }
+
+    return nil
+}
+
+private func acceleratedScalarMultiply<S: MatrixScalar>(_ matrix: Matrix<S>, _ scalar: S) throws -> Matrix<S>? {
+    if S.self == Double.self {
+        let result = try VDSPKernels.multiply(try doubleMatrix(matrix), scalar: scalar as! Double)
+        return try castDoubleMatrix(result, as: S.self)
+    }
+
+    if S.self == Float.self {
+        let result = try VDSPKernels.multiply(try floatMatrix(matrix), scalar: scalar as! Float)
+        return try castFloatMatrix(result, as: S.self)
+    }
+
+    if S.self == Float16.self {
+        let result = try VDSPKernels.multiply(try promotedFloatMatrix(matrix), scalar: Float(scalar as! Float16))
+        return try demotedFloat16Matrix(result, as: S.self)
+    }
+
+    return nil
+}
+
+private func acceleratedGemm<S: MatrixScalar>(_ lhs: Matrix<S>, _ rhs: Matrix<S>) throws -> Matrix<S>? {
+    if S.self == Double.self {
+        let result = try BLASKernels.gemm(try doubleMatrix(lhs), try doubleMatrix(rhs))
+        return try castDoubleMatrix(result, as: S.self)
+    }
+
+    if S.self == Float.self {
+        let result = try BLASKernels.gemm(try floatMatrix(lhs), try floatMatrix(rhs))
+        return try castFloatMatrix(result, as: S.self)
+    }
+
+    if S.self == Float16.self {
+        let result = try BLASKernels.gemm(try promotedFloatMatrix(lhs), try promotedFloatMatrix(rhs))
+        return try demotedFloat16Matrix(result, as: S.self)
+    }
+
+    return nil
+}
+
+private func acceleratedFrobeniusNorm<S: RealFloatingScalar>(_ matrix: Matrix<S>) -> S? {
+    if S.self == Double.self {
+        return BLASKernels.nrm2(try! doubleMatrix(matrix)) as? S
+    }
+
+    if S.self == Float.self {
+        return BLASKernels.nrm2(try! floatMatrix(matrix)) as? S
+    }
+
+    if S.self == Float16.self {
+        return Float16(BLASKernels.nrm2(try! promotedFloatMatrix(matrix))) as? S
+    }
+
+    return nil
+}
+
+private func acceleratedVectorASum<S: RealFloatingScalar>(_ vector: Vector<S>) -> S? {
+    if S.self == Double.self {
+        return BLASKernels.asum(doubleVector(vector)) as? S
+    }
+
+    if S.self == Float.self {
+        return BLASKernels.asum(floatVector(vector)) as? S
+    }
+
+    if S.self == Float16.self {
+        return Float16(BLASKernels.asum(promotedFloatVector(vector))) as? S
+    }
+
+    return nil
+}
+
+private func acceleratedVectorNorm<S: RealFloatingScalar>(_ vector: Vector<S>) -> S? {
+    if S.self == Double.self {
+        return BLASKernels.nrm2(doubleVector(vector)) as? S
+    }
+
+    if S.self == Float.self {
+        return BLASKernels.nrm2(floatVector(vector)) as? S
+    }
+
+    if S.self == Float16.self {
+        return Float16(BLASKernels.nrm2(promotedFloatVector(vector))) as? S
+    }
+
+    return nil
+}
+
+private func acceleratedDot<S: RealFloatingScalar>(_ lhs: Vector<S>, _ rhs: Vector<S>) throws -> S? {
+    if S.self == Double.self {
+        return try BLASKernels.dot(doubleVector(lhs), doubleVector(rhs)) as? S
+    }
+
+    if S.self == Float.self {
+        return try BLASKernels.dot(floatVector(lhs), floatVector(rhs)) as? S
+    }
+
+    if S.self == Float16.self {
+        let result = try BLASKernels.dot(promotedFloatVector(lhs), promotedFloatVector(rhs))
+        return Float16(result) as? S
+    }
+
+    return nil
+}
+
+private func acceleratedMean<S: RealFloatingScalar>(_ vector: Vector<S>) -> S? {
+    if S.self == Double.self {
+        return VDSPKernels.mean(doubleVector(vector)) as? S
+    }
+
+    if S.self == Float.self {
+        return VDSPKernels.mean(floatVector(vector)) as? S
+    }
+
+    if S.self == Float16.self {
+        return Float16(VDSPKernels.mean(promotedFloatVector(vector))) as? S
+    }
+
+    return nil
+}
+
+private func acceleratedMatrixNorm<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ kind: MatrixNorm) -> S? {
+    let lapackKind: LAPACKMatrixNorm
+    switch kind {
+    case .one:
+        lapackKind = .one
+    case .infinity:
+        lapackKind = .infinity
+    case .frobenius:
+        lapackKind = .frobenius
+    case .two:
+        return nil
+    }
+
+    if S.self == Double.self {
+        return LAPACKKernels.norm(try! doubleMatrix(matrix), kind: lapackKind) as? S
+    }
+
+    if S.self == Float.self {
+        return LAPACKKernels.norm(try! floatMatrix(matrix), kind: lapackKind) as? S
+    }
+
+    if S.self == Float16.self {
+        let result = LAPACKKernels.norm(try! promotedFloatMatrix(matrix), kind: lapackKind)
+        return Float16(result) as? S
+    }
+
+    return nil
+}
+
+private func acceleratedLU<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> LUDecomposition<S>? {
+    if S.self == Double.self {
+        let result = try LAPACKKernels.lu(try doubleMatrix(matrix))
+        return try LUDecomposition(
+            l: castDoubleMatrix(result.l, as: S.self),
+            u: castDoubleMatrix(result.u, as: S.self),
+            permutation: result.permutation,
+            parity: result.parity
+        )
+    }
+
+    if S.self == Float.self {
+        let result = try LAPACKKernels.lu(try floatMatrix(matrix))
+        return try LUDecomposition(
+            l: castFloatMatrix(result.l, as: S.self),
+            u: castFloatMatrix(result.u, as: S.self),
+            permutation: result.permutation,
+            parity: result.parity
+        )
+    }
+
+    if S.self == Float16.self {
+        let result = try LAPACKKernels.lu(try promotedFloatMatrix(matrix))
+        return try LUDecomposition(
+            l: demotedFloat16Matrix(result.l, as: S.self),
+            u: demotedFloat16Matrix(result.u, as: S.self),
+            permutation: result.permutation,
+            parity: result.parity
+        )
+    }
+
+    return nil
+}
+
+private func acceleratedSolve<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ b: Vector<S>) throws -> Vector<S>? {
+    if S.self == Double.self {
+        return try castDoubleVector(LAPACKKernels.solve(try doubleMatrix(matrix), doubleVector(b)), as: S.self)
+    }
+
+    if S.self == Float.self {
+        return try castFloatVector(LAPACKKernels.solve(try floatMatrix(matrix), floatVector(b)), as: S.self)
+    }
+
+    if S.self == Float16.self {
+        return demotedFloat16Vector(try LAPACKKernels.solve(try promotedFloatMatrix(matrix), promotedFloatVector(b)), as: S.self)
+    }
+
+    return nil
+}
+
+private func acceleratedSolve<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ rhs: Matrix<S>) throws -> Matrix<S>? {
+    if S.self == Double.self {
+        return try castDoubleMatrix(LAPACKKernels.solve(try doubleMatrix(matrix), try doubleMatrix(rhs)), as: S.self)
+    }
+
+    if S.self == Float.self {
+        return try castFloatMatrix(LAPACKKernels.solve(try floatMatrix(matrix), try floatMatrix(rhs)), as: S.self)
+    }
+
+    if S.self == Float16.self {
+        return try demotedFloat16Matrix(
+            LAPACKKernels.solve(try promotedFloatMatrix(matrix), try promotedFloatMatrix(rhs)),
+            as: S.self
+        )
+    }
+
+    return nil
+}
+
+private func acceleratedDeterminant<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> S? {
+    if S.self == Double.self {
+        return try LAPACKKernels.determinant(try doubleMatrix(matrix)) as? S
+    }
+
+    if S.self == Float.self {
+        return try LAPACKKernels.determinant(try floatMatrix(matrix)) as? S
+    }
+
+    if S.self == Float16.self {
+        return try Float16(LAPACKKernels.determinant(try promotedFloatMatrix(matrix))) as? S
+    }
+
+    return nil
+}
+
+private func acceleratedInverse<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> Matrix<S>? {
+    if S.self == Double.self {
+        return try castDoubleMatrix(LAPACKKernels.inverse(try doubleMatrix(matrix)), as: S.self)
+    }
+
+    if S.self == Float.self {
+        return try castFloatMatrix(LAPACKKernels.inverse(try floatMatrix(matrix)), as: S.self)
+    }
+
+    if S.self == Float16.self {
+        return try demotedFloat16Matrix(LAPACKKernels.inverse(try promotedFloatMatrix(matrix)), as: S.self)
+    }
+
+    return nil
+}
+
+private func acceleratedQR<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> QRDecomposition<S>? {
+    if S.self == Double.self {
+        let result = try LAPACKKernels.qr(try doubleMatrix(matrix))
+        return try QRDecomposition(q: castDoubleMatrix(result.q, as: S.self), r: castDoubleMatrix(result.r, as: S.self))
+    }
+
+    if S.self == Float.self {
+        let result = try LAPACKKernels.qr(try floatMatrix(matrix))
+        return try QRDecomposition(q: castFloatMatrix(result.q, as: S.self), r: castFloatMatrix(result.r, as: S.self))
+    }
+
+    if S.self == Float16.self {
+        let result = try LAPACKKernels.qr(try promotedFloatMatrix(matrix))
+        return try QRDecomposition(q: demotedFloat16Matrix(result.q, as: S.self), r: demotedFloat16Matrix(result.r, as: S.self))
+    }
+
+    return nil
+}
+
+private func acceleratedCholesky<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> CholeskyDecomposition<S>? {
+    if S.self == Double.self {
+        return try CholeskyDecomposition(lower: castDoubleMatrix(LAPACKKernels.cholesky(try doubleMatrix(matrix)), as: S.self))
+    }
+
+    if S.self == Float.self {
+        return try CholeskyDecomposition(lower: castFloatMatrix(LAPACKKernels.cholesky(try floatMatrix(matrix)), as: S.self))
+    }
+
+    if S.self == Float16.self {
+        return try CholeskyDecomposition(lower: demotedFloat16Matrix(LAPACKKernels.cholesky(try promotedFloatMatrix(matrix)), as: S.self))
+    }
+
+    return nil
+}
+
+private func acceleratedSVD<S: RealFloatingScalar>(
+    _ matrix: Matrix<S>,
+    fullVectors: Bool = false
+) throws -> SVDDecomposition<S>? {
+    if S.self == Double.self {
+        let result = try LAPACKKernels.svd(try doubleMatrix(matrix), fullVectors: fullVectors)
+        return try SVDDecomposition(
+            u: castDoubleMatrix(result.u, as: S.self),
+            singularValues: castDoubleVector(result.singularValues, as: S.self),
+            v: castDoubleMatrix(result.v, as: S.self)
+        )
+    }
+
+    if S.self == Float.self {
+        let result = try LAPACKKernels.svd(try floatMatrix(matrix), fullVectors: fullVectors)
+        return try SVDDecomposition(
+            u: castFloatMatrix(result.u, as: S.self),
+            singularValues: castFloatVector(result.singularValues, as: S.self),
+            v: castFloatMatrix(result.v, as: S.self)
+        )
+    }
+
+    if S.self == Float16.self {
+        let result = try LAPACKKernels.svd(try promotedFloatMatrix(matrix), fullVectors: fullVectors)
+        return try SVDDecomposition(
+            u: demotedFloat16Matrix(result.u, as: S.self),
+            singularValues: demotedFloat16Vector(result.singularValues, as: S.self),
+            v: demotedFloat16Matrix(result.v, as: S.self)
+        )
+    }
+
+    return nil
+}
+
+private func acceleratedFundamentalSubspaces<S: RealFloatingScalar>(
+    _ matrix: Matrix<S>,
+    tolerance: S?
+) throws -> FundamentalSubspaces<S>? {
+    guard let svd: SVDDecomposition<S> = try acceleratedSVD(matrix, fullVectors: true) else {
+        return nil
+    }
+
+    let maxSigma = svd.singularValues.count == 0 ? S.zero : svd.singularValues[0]
+    let tol = tolerance ?? S(max(matrix.rows, matrix.columns)) * S.tolerance * maxSigma
+    let rank = (0..<svd.singularValues.count).filter { svd.singularValues[$0] > tol }.count
+
+    return FundamentalSubspaces(
+        columnSpace: columnsFrom(svd.u, indices: Array(0..<rank)),
+        leftNullSpace: columnsFrom(svd.u, indices: Array(rank..<svd.u.columns)),
+        rowSpace: columnsFrom(svd.v, indices: Array(0..<rank)),
+        nullSpace: columnsFrom(svd.v, indices: Array(rank..<svd.v.columns))
+    )
+}
+
+private func acceleratedLeastSquares<S: RealFloatingScalar>(_ matrix: Matrix<S>, _ b: Vector<S>) throws -> Vector<S>? {
+    if S.self == Double.self {
+        return try castDoubleVector(LAPACKKernels.leastSquares(try doubleMatrix(matrix), doubleVector(b)), as: S.self)
+    }
+
+    if S.self == Float.self {
+        return try castFloatVector(LAPACKKernels.leastSquares(try floatMatrix(matrix), floatVector(b)), as: S.self)
+    }
+
+    if S.self == Float16.self {
+        return demotedFloat16Vector(try LAPACKKernels.leastSquares(try promotedFloatMatrix(matrix), promotedFloatVector(b)), as: S.self)
+    }
+
+    return nil
+}
+
+private func acceleratedBalance<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> (balanced: Matrix<S>, scales: Vector<S>)? {
+    if S.self == Double.self {
+        let result = try LAPACKKernels.balance(try doubleMatrix(matrix))
+        return try (castDoubleMatrix(result.balanced, as: S.self), castDoubleVector(result.scales, as: S.self))
+    }
+
+    if S.self == Float.self {
+        let result = try LAPACKKernels.balance(try floatMatrix(matrix))
+        return try (castFloatMatrix(result.balanced, as: S.self), castFloatVector(result.scales, as: S.self))
+    }
+
+    if S.self == Float16.self {
+        let result = try LAPACKKernels.balance(try promotedFloatMatrix(matrix))
+        return try (demotedFloat16Matrix(result.balanced, as: S.self), demotedFloat16Vector(result.scales, as: S.self))
+    }
+
+    return nil
+}
+
+private func acceleratedEigen<S: RealFloatingScalar>(_ matrix: Matrix<S>) throws -> EigenDecomposition<S>? {
+    if S.self == Double.self {
+        let realMatrix = try doubleMatrix(matrix)
+        if isSymmetric(matrix, tolerance: S.tolerance * S(100)) {
+            let result = try LAPACKKernels.symmetricEigen(realMatrix)
+            return try symmetricEigenDecomposition(
+                values: castDoubleVector(result.values, as: S.self),
+                vectors: castDoubleMatrix(result.vectors, as: S.self)
+            )
+        }
+
+        let result = try LAPACKKernels.eigen(realMatrix)
+        return try generalEigenDecomposition(
+            realParts: castDoubleVector(result.realParts, as: S.self),
+            imaginaryParts: castDoubleVector(result.imaginaryParts, as: S.self),
+            packedVectors: castDoubleMatrix(result.rightEigenvectorsPacked, as: S.self)
+        )
+    }
+
+    if S.self == Float.self {
+        let realMatrix = try floatMatrix(matrix)
+        if isSymmetric(matrix, tolerance: S.tolerance * S(100)) {
+            let result = try LAPACKKernels.symmetricEigen(realMatrix)
+            return try symmetricEigenDecomposition(
+                values: castFloatVector(result.values, as: S.self),
+                vectors: castFloatMatrix(result.vectors, as: S.self)
+            )
+        }
+
+        let result = try LAPACKKernels.eigen(realMatrix)
+        return try generalEigenDecomposition(
+            realParts: castFloatVector(result.realParts, as: S.self),
+            imaginaryParts: castFloatVector(result.imaginaryParts, as: S.self),
+            packedVectors: castFloatMatrix(result.rightEigenvectorsPacked, as: S.self)
+        )
+    }
+
+    if S.self == Float16.self {
+        let realMatrix = try promotedFloatMatrix(matrix)
+        if isSymmetric(matrix, tolerance: S.tolerance * S(100)) {
+            let result = try LAPACKKernels.symmetricEigen(realMatrix)
+            return try symmetricEigenDecomposition(
+                values: demotedFloat16Vector(result.values, as: S.self),
+                vectors: demotedFloat16Matrix(result.vectors, as: S.self)
+            )
+        }
+
+        let result = try LAPACKKernels.eigen(realMatrix)
+        return try generalEigenDecomposition(
+            realParts: demotedFloat16Vector(result.realParts, as: S.self),
+            imaginaryParts: demotedFloat16Vector(result.imaginaryParts, as: S.self),
+            packedVectors: demotedFloat16Matrix(result.rightEigenvectorsPacked, as: S.self)
+        )
+    }
+
+    return nil
+}
+
+private func symmetricEigenDecomposition<S: RealFloatingScalar>(
+    values: Vector<S>,
+    vectors: Matrix<S>
+) throws -> EigenDecomposition<S> {
+    EigenDecomposition(
+        values: (0..<values.count).map { Complex<S>(values[$0]) },
+        vectors: vectors.map { Complex<S>($0) }
+    )
+}
+
+private func generalEigenDecomposition<S: RealFloatingScalar>(
+    realParts: Vector<S>,
+    imaginaryParts: Vector<S>,
+    packedVectors: Matrix<S>
+) throws -> EigenDecomposition<S> {
+    let n = realParts.count
+    var vectors = Matrix<Complex<S>>.zeros(packedVectors.rows, packedVectors.columns)
+    var column = 0
+    while column < n {
+        let imaginary = imaginaryParts[column]
+        if imaginary == .zero {
+            for row in 0..<packedVectors.rows {
+                vectors[row, column] = Complex<S>(packedVectors[row, column])
+            }
+            column += 1
+        } else if imaginary > .zero && column + 1 < n {
+            for row in 0..<packedVectors.rows {
+                let real = packedVectors[row, column]
+                let imag = packedVectors[row, column + 1]
+                vectors[row, column] = Complex<S>(real, imag)
+                vectors[row, column + 1] = Complex<S>(real, -imag)
+            }
+            column += 2
+        } else {
+            column += 1
+        }
+    }
+
+    let values = (0..<n).map { Complex<S>(realParts[$0], imaginaryParts[$0]) }
+    return EigenDecomposition(values: values, vectors: vectors)
+}
+
+private func doubleMatrix<S: MatrixScalar>(_ matrix: Matrix<S>) throws -> Matrix<Double> {
+    try Matrix<Double>(
+        rowMajor: matrix.rowMajorElements().map { $0 as! Double },
+        rows: matrix.rows,
+        columns: matrix.columns
+    )
+}
+
+private func floatMatrix<S: MatrixScalar>(_ matrix: Matrix<S>) throws -> Matrix<Float> {
+    try Matrix<Float>(
+        rowMajor: matrix.rowMajorElements().map { $0 as! Float },
+        rows: matrix.rows,
+        columns: matrix.columns
+    )
+}
+
+private func promotedFloatMatrix<S: MatrixScalar>(_ matrix: Matrix<S>) throws -> Matrix<Float> {
+    try Matrix<Float>(
+        rowMajor: matrix.rowMajorElements().map { Float($0 as! Float16) },
+        rows: matrix.rows,
+        columns: matrix.columns
+    )
+}
+
+private func castDoubleMatrix<S: MatrixScalar>(_ matrix: Matrix<Double>, as scalar: S.Type) throws -> Matrix<S> {
+    try Matrix<S>(
+        rowMajor: matrix.rowMajorElements().map { $0 as! S },
+        rows: matrix.rows,
+        columns: matrix.columns
+    )
+}
+
+private func castFloatMatrix<S: MatrixScalar>(_ matrix: Matrix<Float>, as scalar: S.Type) throws -> Matrix<S> {
+    try Matrix<S>(
+        rowMajor: matrix.rowMajorElements().map { $0 as! S },
+        rows: matrix.rows,
+        columns: matrix.columns
+    )
+}
+
+private func demotedFloat16Matrix<S: MatrixScalar>(_ matrix: Matrix<Float>, as scalar: S.Type) throws -> Matrix<S> {
+    try Matrix<S>(
+        rowMajor: matrix.rowMajorElements().map { Float16($0) as! S },
+        rows: matrix.rows,
+        columns: matrix.columns
+    )
+}
+
+private func doubleVector<S: RealFloatingScalar>(_ vector: Vector<S>) -> Vector<Double> {
+    Vector((0..<vector.count).map { vector[$0] as! Double })
+}
+
+private func floatVector<S: RealFloatingScalar>(_ vector: Vector<S>) -> Vector<Float> {
+    Vector((0..<vector.count).map { vector[$0] as! Float })
+}
+
+private func promotedFloatVector<S: RealFloatingScalar>(_ vector: Vector<S>) -> Vector<Float> {
+    Vector((0..<vector.count).map { Float(vector[$0] as! Float16) })
+}
+
+private func castDoubleVector<S: RealFloatingScalar>(_ vector: Vector<Double>, as scalar: S.Type) -> Vector<S> {
+    Vector((0..<vector.count).map { vector[$0] as! S })
+}
+
+private func castFloatVector<S: RealFloatingScalar>(_ vector: Vector<Float>, as scalar: S.Type) -> Vector<S> {
+    Vector((0..<vector.count).map { vector[$0] as! S })
+}
+
+private func demotedFloat16Vector<S: RealFloatingScalar>(_ vector: Vector<Float>, as scalar: S.Type) -> Vector<S> {
+    Vector((0..<vector.count).map { Float16(vector[$0]) as! S })
 }
 
 private func shiftMatrix<S: RealFloatingScalar>(_ n: Int, _ shift: S) -> Matrix<S> {
