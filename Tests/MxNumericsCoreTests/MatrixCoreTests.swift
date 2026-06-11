@@ -4,7 +4,7 @@
 //
 //  Created by Alexandro Sanchez on 6/9/26.
 //
-import MxNumericsCore
+@testable import MxNumerics
 import Testing
 
 @Suite

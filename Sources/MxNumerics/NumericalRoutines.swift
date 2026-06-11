@@ -5,9 +5,8 @@
 //  Created by Alexandro Sanchez on 6/9/26.
 //
 
-import ComplexModule
-import Foundation
-import MxNumericsAccelerate
+public import ComplexModule
+internal import Foundation
 
 public enum MatrixNorm: Sendable {
     case one
@@ -458,7 +457,7 @@ public func gramSchmidtFactorization<S: RealFloatingScalar>(
     }
 }
 
-public func gramSmchmidtFactorization<S: RealFloatingScalar>(_ matrix: Matrix<S>) -> QRDecomposition<S> {
+func gramSmchmidtFactorization<S: RealFloatingScalar>(_ matrix: Matrix<S>) -> QRDecomposition<S> {
     gramSchmidtFactorization(matrix)
 }
 
@@ -768,7 +767,7 @@ public func fundamentalSubspaces<S: RealFloatingScalar>(_ matrix: Matrix<S>, tol
     return FundamentalSubspaces(columnSpace: columnSpace, leftNullSpace: leftNullSpace, rowSpace: rowSpace, nullSpace: nullSpace)
 }
 
-public func fundemantalSubspaces<S: RealFloatingScalar>(_ matrix: Matrix<S>, tolerance: S? = nil) -> FundamentalSubspaces<S> {
+func fundemantalSubspaces<S: RealFloatingScalar>(_ matrix: Matrix<S>, tolerance: S? = nil) -> FundamentalSubspaces<S> {
     fundamentalSubspaces(matrix, tolerance: tolerance)
 }
 

@@ -3,6 +3,8 @@
 .swiftpm/
 DerivedData/
 *.xcodeproj/
+!MxNumerics.xcodeproj/
+!MxNumerics.xcodeproj/**
 *.xcworkspace/
 *.xcuserdata/
 Package.resolved

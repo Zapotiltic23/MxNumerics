@@ -4,7 +4,6 @@
 //
 //  Created by Alexandro Sanchez on 6/9/26.
 //
-import MxNumericsCore
 
 /// Controls backend selection.
 public enum BackendPolicy: Sendable, Equatable {
@@ -38,18 +37,18 @@ public struct DispatchDecision: Sendable, Equatable {
 /// be routed to MLX when GPU support is available. Deterministic mode overrides
 /// the automatic policy and forces the CPU reference path chosen for regression
 /// stability.
-public struct BackendRouter: Sendable {
+struct BackendRouter: Sendable {
     /// The explicit backend policy.
-    public var policy: BackendPolicy
+    var policy: BackendPolicy
 
     /// A Boolean value that forces deterministic CPU routing when true.
-    public var deterministicMode: Bool
+    var deterministicMode: Bool
 
     /// A Boolean value indicating whether the MLX backend reports GPU availability.
-    public var gpuAvailable: Bool
+    var gpuAvailable: Bool
 
     /// The minimum result element count for routing Float GEMM to MLX in auto mode.
-    public var gpuGemmElementThreshold: Int
+    var gpuGemmElementThreshold: Int
 
     /// Creates a backend router.
     ///
@@ -59,7 +58,7 @@ public struct BackendRouter: Sendable {
     ///   - gpuAvailable: Whether GPU-backed MLX routing is available.
     ///   - gpuGemmElementThreshold: The minimum result element count for
     ///     auto-routing Float GEMM to MLX.
-    public init(
+    init(
         policy: BackendPolicy = .auto,
         deterministicMode: Bool = false,
         gpuAvailable: Bool = false,
@@ -79,7 +78,7 @@ public struct BackendRouter: Sendable {
     ///   - rows: The operation's representative row count.
     ///   - columns: The operation's representative column count.
     /// - Returns: The backend decision and the reason for it.
-    public func choose<S: MatrixScalar>(
+    func choose<S: MatrixScalar>(
         op: BackendOperation,
         scalar: S.Type,
         rows: Int,

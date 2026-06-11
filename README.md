@@ -14,7 +14,7 @@ scalar paths remain on the portable Swift reference implementations.
 
 - **Language:** Swift 6
 - **Package manager:** Swift Package Manager
-- **Platforms:** macOS 14+, iOS 17+, visionOS 1+, tvOS 17+
+- **Platforms:** macOS 14+ arm64, iOS 17+, visionOS 1+, tvOS 17+
 - **Primary product:** `MxNumerics`
 - **Scalar support:** `Double`, `Float`, `Float16`, `Complex<Double>`, `Complex<Float>` where routines permit them
 - **Indexing:** zero-based, with both `A[i, j]` and `A[i][j]`
@@ -23,17 +23,24 @@ scalar paths remain on the portable Swift reference implementations.
 
 ## Installation
 
-Add the package to an app or framework with Swift Package Manager:
+For app targets, use the binary Swift package that vends
+`MxNumerics.xcframework`. This keeps implementation source out of the consuming
+project while preserving autocomplete and generated public interfaces.
 
 ```swift
-.package(url: "https://github.com/Zapotiltic23/MxNumerics.git", branch: "develop")
+.package(url: "https://github.com/Zapotiltic23/MxNumericsBinary.git", from: "1.0.0")
 ```
 
 Then add the product to your target:
 
 ```swift
-.product(name: "MxNumerics", package: "MxNumerics")
+.product(name: "MxNumerics", package: "MxNumericsBinary")
 ```
+
+This repository remains the source package used to develop, test, and release
+the framework artifact. See
+`docs/release/TRUE_FRAMEWORK_RELEASE.md` and `scripts/release-xcframework.sh`
+for the binary release flow.
 
 Use it from Swift:
 
@@ -51,19 +58,20 @@ let x = try A.solve(b)
 
 ## Design Overview
 
-MxNumerics is split into narrow modules:
+MxNumerics builds as one public module. Internally, the source tree stays split
+by responsibility:
 
 | Target | Role |
 |---|---|
-| `MxNumericsCore` | Scalar protocols, dense matrix/vector types, COW storage, shape/stride metadata, slicing tokens, basic arithmetic |
-| `MxNumericsBackend` | Backend identifiers, operation routing, plain row-major `BufferRef`, reference backend protocol |
-| `MxNumericsAccelerate` | Accelerate integration point for BLAS/LAPACK/vDSP shims |
-| `MxNumericsMLX` | MLX integration point for future GPU-resident Float/Float16 kernels |
-| `MxNumerics` | Umbrella API, runtime controls, numerical routine catalog |
+| `Sources/MxNumericsCore` | Scalar protocols, dense matrix/vector types, COW storage, shape/stride metadata, slicing tokens, basic arithmetic |
+| `Sources/MxNumericsBackend` | Internal backend identifiers, routing, plain row-major buffers, reference backend protocol |
+| `Sources/MxNumericsAccelerate` | Internal Accelerate integration for BLAS/LAPACK/vDSP shims |
+| `Sources/MxNumericsMLX` | Internal MLX integration point for future GPU-resident Float/Float16 kernels |
+| `Sources/MxNumerics` | Public runtime controls and numerical routine catalog |
 
-The public API does not expose Accelerate or MLX types. Backends communicate
-through plain row-major buffers, which keeps the API stable while allowing the
-implementation to move work between CPU, GPU, and reference kernels.
+The public API does not expose Accelerate, MLX, BLAS, LAPACK, vDSP, or backend
+buffer types. Those implementation details stay internal so the generated
+framework interface remains a clean `MxNumerics` surface.
 
 ## Core Data Model
 
@@ -118,8 +126,8 @@ The runtime router chooses a backend based on operation, scalar type, size, and
 availability:
 
 ```swift
-MxNumerics.deterministicMode = true
-MxNumerics.backendPolicy = .auto
+MxNumericsRuntime.deterministicMode = true
+MxNumericsRuntime.backendPolicy = .auto
 let decision = A.backendDecision(for: .gemm)
 ```
 
@@ -127,13 +135,13 @@ Current policy:
 
 - `Double` and factorization-class routines prefer the Accelerate path.
 - Large `Float` GEMM is eligible for MLX when MLX is available.
-- The portable `ReferenceBackend` is used as a correctness path.
+- The internal portable reference backend is used as a correctness path.
 - `deterministicMode` forces CPU-oriented routing decisions for reproducibility.
 
 The implemented high-level numerical catalog calls the synchronous Accelerate
 kernel layer for supported real floating-point work. The in-core arithmetic
-operators remain portable reference implementations so `MxNumericsCore` does
-not depend on Accelerate.
+operators remain portable reference implementations and do not depend on
+Accelerate directly.
 
 ## Numerical Accuracy Notes
 
@@ -313,7 +321,6 @@ routine remains implemented in portable Swift.
 | `rank(_:tolerance:)` | \(\#\{\sigma_i>\tau\}\) | LAPACK SVD threshold for D/F/F16 |
 | `nullity(_:tolerance:)` | \(n-\operatorname{rank}(A)\) | Rank-nullity |
 | `fundamentalSubspaces(_:tolerance:)` | column, row, null, left-null bases | Full LAPACK SVD for D/F/F16 |
-| `fundemantalSubspaces(_:tolerance:)` | same as above | Deprecated typo-compatible alias |
 
 ### QR and Orthogonalization
 
@@ -322,7 +329,6 @@ routine remains implemented in portable Swift.
 | `householderVector(_:)` | \(H=I-\beta vv^T\) | Stable sign choice |
 | `qr(_:)`, `Matrix.qr()` | \(A=QR\) | LAPACK `geqrf`/`orgqr` for D/F/F16 |
 | `gramSchmidtFactorization(_:mode:)` | \(A=QR\) | Modified or classical GS |
-| `gramSmchmidtFactorization(_:)` | \(A=QR\) | Typo-compatible alias |
 | `isOrthogonal(_:)` | \(\|Q^TQ-I\|\le\tau\) | Tolerance-based |
 | `isGramSchmidt(_:of:)` | checks \(QR\approx A\), \(Q^TQ\approx I\) | Property check |
 

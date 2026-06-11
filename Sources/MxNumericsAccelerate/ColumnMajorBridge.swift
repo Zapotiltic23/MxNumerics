@@ -5,10 +5,9 @@
 //  Created by Alexandro Sanchez on 6/9/26.
 //
 
-import MxNumericsCore
 
-public enum ColumnMajorBridge {
-    public static func columnMajor<S: MatrixScalar>(from matrix: Matrix<S>) -> [S] {
+enum ColumnMajorBridge {
+    static func columnMajor<S: MatrixScalar>(from matrix: Matrix<S>) -> [S] {
         var result = Array(repeating: S.zero, count: matrix.count)
         for row in 0..<matrix.rows {
             for column in 0..<matrix.columns {
@@ -18,7 +17,7 @@ public enum ColumnMajorBridge {
         return result
     }
 
-    public static func rowMajor<S: MatrixScalar>(
+    static func rowMajor<S: MatrixScalar>(
         fromColumnMajor elements: [S],
         rows: Int,
         columns: Int

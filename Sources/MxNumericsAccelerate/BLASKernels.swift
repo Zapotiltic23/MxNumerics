@@ -5,11 +5,10 @@
 //  Created by Alexandro Sanchez on 6/9/26.
 //
 
-import Accelerate
-import MxNumericsCore
+internal import Accelerate
 
-public enum BLASKernels {
-    public static func gemm(_ a: Matrix<Double>, _ b: Matrix<Double>) throws -> Matrix<Double> {
+enum BLASKernels {
+    static func gemm(_ a: Matrix<Double>, _ b: Matrix<Double>) throws -> Matrix<Double> {
         guard a.columns == b.rows else {
             throw LinAlgError.dimensionMismatch("GEMM requires a.columns == b.rows.")
         }
@@ -41,7 +40,7 @@ public enum BLASKernels {
         return try Matrix(rowMajor: result, rows: a.rows, columns: b.columns)
     }
 
-    public static func gemm(_ a: Matrix<Float>, _ b: Matrix<Float>) throws -> Matrix<Float> {
+    static func gemm(_ a: Matrix<Float>, _ b: Matrix<Float>) throws -> Matrix<Float> {
         guard a.columns == b.rows else {
             throw LinAlgError.dimensionMismatch("GEMM requires a.columns == b.rows.")
         }
@@ -73,7 +72,7 @@ public enum BLASKernels {
         return try Matrix(rowMajor: result, rows: a.rows, columns: b.columns)
     }
 
-    public static func gemv(_ a: Matrix<Double>, _ x: Vector<Double>) throws -> Vector<Double> {
+    static func gemv(_ a: Matrix<Double>, _ x: Vector<Double>) throws -> Vector<Double> {
         guard a.columns == x.count else {
             throw LinAlgError.dimensionMismatch("GEMV requires a.columns == x.count.")
         }
@@ -89,7 +88,7 @@ public enum BLASKernels {
         return Vector(result)
     }
 
-    public static func gemv(_ a: Matrix<Float>, _ x: Vector<Float>) throws -> Vector<Float> {
+    static func gemv(_ a: Matrix<Float>, _ x: Vector<Float>) throws -> Vector<Float> {
         guard a.columns == x.count else {
             throw LinAlgError.dimensionMismatch("GEMV requires a.columns == x.count.")
         }
@@ -105,7 +104,7 @@ public enum BLASKernels {
         return Vector(result)
     }
 
-    public static func dot(_ x: Vector<Double>, _ y: Vector<Double>) throws -> Double {
+    static func dot(_ x: Vector<Double>, _ y: Vector<Double>) throws -> Double {
         guard x.count == y.count else { throw LinAlgError.dimensionMismatch("Dot product requires equal lengths.") }
         let n = checkedBLASInt(x.count)
         return x.withUnsafeValues { xPointer in
@@ -115,7 +114,7 @@ public enum BLASKernels {
         }
     }
 
-    public static func dot(_ x: Vector<Float>, _ y: Vector<Float>) throws -> Float {
+    static func dot(_ x: Vector<Float>, _ y: Vector<Float>) throws -> Float {
         guard x.count == y.count else { throw LinAlgError.dimensionMismatch("Dot product requires equal lengths.") }
         let n = checkedBLASInt(x.count)
         return x.withUnsafeValues { xPointer in
@@ -125,39 +124,39 @@ public enum BLASKernels {
         }
     }
 
-    public static func nrm2(_ x: Vector<Double>) -> Double {
+    static func nrm2(_ x: Vector<Double>) -> Double {
         x.withUnsafeValues { pointer in
             cblas_dnrm2(checkedBLASInt(x.count), pointer.baseAddress!, 1)
         }
     }
 
-    public static func nrm2(_ x: Vector<Float>) -> Float {
+    static func nrm2(_ x: Vector<Float>) -> Float {
         x.withUnsafeValues { pointer in
             cblas_snrm2(checkedBLASInt(x.count), pointer.baseAddress!, 1)
         }
     }
 
-    public static func nrm2(_ matrix: Matrix<Double>) -> Double {
+    static func nrm2(_ matrix: Matrix<Double>) -> Double {
         matrix.withUnsafeRowMajor { pointer, _, _ in
             cblas_dnrm2(checkedBLASInt(matrix.count), pointer.baseAddress!, 1)
         }
     }
 
-    public static func nrm2(_ matrix: Matrix<Float>) -> Float {
+    static func nrm2(_ matrix: Matrix<Float>) -> Float {
         matrix.withUnsafeRowMajor { pointer, _, _ in
             cblas_snrm2(checkedBLASInt(matrix.count), pointer.baseAddress!, 1)
         }
     }
 
-    public static func asum(_ x: Vector<Double>) -> Double {
+    static func asum(_ x: Vector<Double>) -> Double {
         x.withUnsafeValues { pointer in cblas_dasum(checkedBLASInt(x.count), pointer.baseAddress!, 1) }
     }
 
-    public static func asum(_ x: Vector<Float>) -> Float {
+    static func asum(_ x: Vector<Float>) -> Float {
         x.withUnsafeValues { pointer in cblas_sasum(checkedBLASInt(x.count), pointer.baseAddress!, 1) }
     }
 
-    public static func axpy(alpha: Double, x: Vector<Double>, y: Vector<Double>) throws -> Vector<Double> {
+    static func axpy(alpha: Double, x: Vector<Double>, y: Vector<Double>) throws -> Vector<Double> {
         guard x.count == y.count else { throw LinAlgError.dimensionMismatch("AXPY requires equal lengths.") }
         var result = y.asColumnMatrix().rowMajorElements()
         x.withUnsafeValues { pointer in
@@ -166,7 +165,7 @@ public enum BLASKernels {
         return Vector(result)
     }
 
-    public static func axpy(alpha: Float, x: Vector<Float>, y: Vector<Float>) throws -> Vector<Float> {
+    static func axpy(alpha: Float, x: Vector<Float>, y: Vector<Float>) throws -> Vector<Float> {
         guard x.count == y.count else { throw LinAlgError.dimensionMismatch("AXPY requires equal lengths.") }
         var result = y.asColumnMatrix().rowMajorElements()
         x.withUnsafeValues { pointer in
@@ -175,13 +174,13 @@ public enum BLASKernels {
         return Vector(result)
     }
 
-    public static func scal(alpha: Double, x: Vector<Double>) -> Vector<Double> {
+    static func scal(alpha: Double, x: Vector<Double>) -> Vector<Double> {
         var result = x.asColumnMatrix().rowMajorElements()
         cblas_dscal(checkedBLASInt(x.count), alpha, &result, 1)
         return Vector(result)
     }
 
-    public static func scal(alpha: Float, x: Vector<Float>) -> Vector<Float> {
+    static func scal(alpha: Float, x: Vector<Float>) -> Vector<Float> {
         var result = x.asColumnMatrix().rowMajorElements()
         cblas_sscal(checkedBLASInt(x.count), alpha, &result, 1)
         return Vector(result)

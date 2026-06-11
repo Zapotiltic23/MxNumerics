@@ -11,15 +11,15 @@ import Testing
 struct MxNumericsTests {
     @Test
     func runtimeStateIsConcurrencySafeAndAffectsDispatch() throws {
-        let previousDeterministicMode = MxNumerics.deterministicMode
-        let previousPolicy = MxNumerics.backendPolicy
+        let previousDeterministicMode = MxNumericsRuntime.deterministicMode
+        let previousPolicy = MxNumericsRuntime.backendPolicy
         defer {
-            MxNumerics.deterministicMode = previousDeterministicMode
-            MxNumerics.backendPolicy = previousPolicy
+            MxNumericsRuntime.deterministicMode = previousDeterministicMode
+            MxNumericsRuntime.backendPolicy = previousPolicy
         }
 
-        MxNumerics.deterministicMode = true
-        MxNumerics.backendPolicy = .forceMLX
+        MxNumericsRuntime.deterministicMode = true
+        MxNumericsRuntime.backendPolicy = .forceMLX
 
         let matrix = try Matrix<Float>([
             [1, 2],

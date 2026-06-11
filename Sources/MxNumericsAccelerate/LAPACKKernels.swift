@@ -5,64 +5,62 @@
 //  Created by Alexandro Sanchez on 6/9/26.
 //
 
-import Accelerate
-import MxNumericsCore
+internal import Accelerate
 
 private typealias LAPACKInteger = Int32
 
 /// The result of a LAPACK LU factorization.
 ///
 /// LAPACK `getrf` computes a partial-pivoting factorization `P A = L U`.
-/// The permutation is stored as zero-based row indices matching the public
-/// routines in `MxNumerics`.
-public struct LAPACKLUResult<Scalar: RealFloatingScalar>: Sendable {
+/// The permutation is stored as zero-based row indices matching the /// routines in `MxNumerics`.
+struct LAPACKLUResult<Scalar: RealFloatingScalar>: Sendable {
     /// The unit lower-triangular factor.
-    public let l: Matrix<Scalar>
+    let l: Matrix<Scalar>
 
     /// The upper-triangular factor.
-    public let u: Matrix<Scalar>
+    let u: Matrix<Scalar>
 
     /// The zero-based permutation applied to the right-hand side.
-    public let permutation: [Int]
+    let permutation: [Int]
 
     /// The sign of the permutation, either `1` or `-1`.
-    public let parity: Int
+    let parity: Int
 }
 
 /// The result of a LAPACK QR factorization.
 ///
 /// The factorization is returned in economy form: `q` has orthonormal columns
 /// and `r` has `min(m, n)` rows, so `q * r` reconstructs the original matrix.
-public struct LAPACKQRResult<Scalar: RealFloatingScalar>: Sendable {
+struct LAPACKQRResult<Scalar: RealFloatingScalar>: Sendable {
     /// The orthonormal factor.
-    public let q: Matrix<Scalar>
+    let q: Matrix<Scalar>
 
     /// The upper-trapezoidal factor.
-    public let r: Matrix<Scalar>
+    let r: Matrix<Scalar>
 }
 
 /// The result of a LAPACK singular value decomposition.
 ///
 /// For the thin form, `u` is `m x min(m, n)` and `v` is `n x min(m, n)`.
 /// For the full form, `u` is `m x m` and `v` is `n x n`.
-public struct LAPACKSVDResult<Scalar: RealFloatingScalar>: Sendable {
+struct LAPACKSVDResult<Scalar: RealFloatingScalar>: Sendable {
     /// The left singular vectors.
-    public let u: Matrix<Scalar>
+    let u: Matrix<Scalar>
 
     /// The singular values in descending order.
-    public let singularValues: Vector<Scalar>
+    let singularValues: Vector<Scalar>
 
     /// The right singular vectors.
-    public let v: Matrix<Scalar>
+    let v: Matrix<Scalar>
 }
 
 /// The result of a symmetric eigenvalue decomposition.
-public struct LAPACKSymmetricEigenResult<Scalar: RealFloatingScalar>: Sendable {
+struct LAPACKSymmetricEigenResult<Scalar: RealFloatingScalar>: Sendable {
     /// The eigenvalues in ascending order.
-    public let values: Vector<Scalar>
+    let values: Vector<Scalar>
 
     /// The orthonormal eigenvectors, stored as columns.
-    public let vectors: Matrix<Scalar>
+    let vectors: Matrix<Scalar>
 }
 
 /// The result of a real, general eigenvalue decomposition.
@@ -70,15 +68,15 @@ public struct LAPACKSymmetricEigenResult<Scalar: RealFloatingScalar>: Sendable {
 /// LAPACK `geev` returns real and imaginary parts separately. For complex
 /// conjugate pairs, `rightEigenvectorsPacked` follows LAPACK's packed real
 /// convention: adjacent columns hold the real and imaginary parts.
-public struct LAPACKGeneralEigenResult<Scalar: RealFloatingScalar>: Sendable {
+struct LAPACKGeneralEigenResult<Scalar: RealFloatingScalar>: Sendable {
     /// The real parts of the eigenvalues.
-    public let realParts: Vector<Scalar>
+    let realParts: Vector<Scalar>
 
     /// The imaginary parts of the eigenvalues.
-    public let imaginaryParts: Vector<Scalar>
+    let imaginaryParts: Vector<Scalar>
 
     /// The packed right eigenvectors returned by LAPACK.
-    public let rightEigenvectorsPacked: Matrix<Scalar>
+    let rightEigenvectorsPacked: Matrix<Scalar>
 }
 
 /// Synchronous wrappers around Accelerate's LAPACK routines.
@@ -86,152 +84,152 @@ public struct LAPACKGeneralEigenResult<Scalar: RealFloatingScalar>: Sendable {
 /// These routines accept and return `Matrix` and `Vector` values in MxNumerics'
 /// row-major value model. LAPACK's Fortran column-major storage is handled
 /// internally with ``ColumnMajorBridge``.
-public enum LAPACKKernels {
+enum LAPACKKernels {
     /// Computes `P A = L U` with partial pivoting.
-    public static func lu(_ matrix: Matrix<Double>) throws -> LAPACKLUResult<Double> {
+    static func lu(_ matrix: Matrix<Double>) throws -> LAPACKLUResult<Double> {
         try luDouble(matrix)
     }
 
     /// Computes `P A = L U` with partial pivoting.
-    public static func lu(_ matrix: Matrix<Float>) throws -> LAPACKLUResult<Float> {
+    static func lu(_ matrix: Matrix<Float>) throws -> LAPACKLUResult<Float> {
         try luFloat(matrix)
     }
 
     /// Solves `A x = b` with LU factorization and partial pivoting.
-    public static func solve(_ matrix: Matrix<Double>, _ b: Vector<Double>) throws -> Vector<Double> {
+    static func solve(_ matrix: Matrix<Double>, _ b: Vector<Double>) throws -> Vector<Double> {
         let solution = try solve(matrix, b.asColumnMatrix())
         return Vector(solution.rowMajorElements())
     }
 
     /// Solves `A x = b` with LU factorization and partial pivoting.
-    public static func solve(_ matrix: Matrix<Float>, _ b: Vector<Float>) throws -> Vector<Float> {
+    static func solve(_ matrix: Matrix<Float>, _ b: Vector<Float>) throws -> Vector<Float> {
         let solution = try solve(matrix, b.asColumnMatrix())
         return Vector(solution.rowMajorElements())
     }
 
     /// Solves `A X = B` with one LU factorization and multiple right-hand sides.
-    public static func solve(_ matrix: Matrix<Double>, _ rhs: Matrix<Double>) throws -> Matrix<Double> {
+    static func solve(_ matrix: Matrix<Double>, _ rhs: Matrix<Double>) throws -> Matrix<Double> {
         try solveDouble(matrix, rhs)
     }
 
     /// Solves `A X = B` with one LU factorization and multiple right-hand sides.
-    public static func solve(_ matrix: Matrix<Float>, _ rhs: Matrix<Float>) throws -> Matrix<Float> {
+    static func solve(_ matrix: Matrix<Float>, _ rhs: Matrix<Float>) throws -> Matrix<Float> {
         try solveFloat(matrix, rhs)
     }
 
     /// Computes `A^-1` by applying `getrf` followed by `getri`.
-    public static func inverse(_ matrix: Matrix<Double>) throws -> Matrix<Double> {
+    static func inverse(_ matrix: Matrix<Double>) throws -> Matrix<Double> {
         try inverseDouble(matrix)
     }
 
     /// Computes `A^-1` by applying `getrf` followed by `getri`.
-    public static func inverse(_ matrix: Matrix<Float>) throws -> Matrix<Float> {
+    static func inverse(_ matrix: Matrix<Float>) throws -> Matrix<Float> {
         try inverseFloat(matrix)
     }
 
     /// Computes the determinant from the diagonal of a `getrf` factorization.
-    public static func determinant(_ matrix: Matrix<Double>) throws -> Double {
+    static func determinant(_ matrix: Matrix<Double>) throws -> Double {
         try determinantDouble(matrix)
     }
 
     /// Computes the determinant from the diagonal of a `getrf` factorization.
-    public static func determinant(_ matrix: Matrix<Float>) throws -> Float {
+    static func determinant(_ matrix: Matrix<Float>) throws -> Float {
         try determinantFloat(matrix)
     }
 
     /// Computes an economy QR factorization.
-    public static func qr(_ matrix: Matrix<Double>) throws -> LAPACKQRResult<Double> {
+    static func qr(_ matrix: Matrix<Double>) throws -> LAPACKQRResult<Double> {
         try qrDouble(matrix)
     }
 
     /// Computes an economy QR factorization.
-    public static func qr(_ matrix: Matrix<Float>) throws -> LAPACKQRResult<Float> {
+    static func qr(_ matrix: Matrix<Float>) throws -> LAPACKQRResult<Float> {
         try qrFloat(matrix)
     }
 
     /// Computes the lower Cholesky factor of a symmetric positive-definite matrix.
-    public static func cholesky(_ matrix: Matrix<Double>) throws -> Matrix<Double> {
+    static func cholesky(_ matrix: Matrix<Double>) throws -> Matrix<Double> {
         try choleskyDouble(matrix)
     }
 
     /// Computes the lower Cholesky factor of a symmetric positive-definite matrix.
-    public static func cholesky(_ matrix: Matrix<Float>) throws -> Matrix<Float> {
+    static func cholesky(_ matrix: Matrix<Float>) throws -> Matrix<Float> {
         try choleskyFloat(matrix)
     }
 
     /// Solves an SPD system from a Cholesky factorization.
-    public static func solveSPD(_ matrix: Matrix<Double>, _ rhs: Matrix<Double>) throws -> Matrix<Double> {
+    static func solveSPD(_ matrix: Matrix<Double>, _ rhs: Matrix<Double>) throws -> Matrix<Double> {
         try solveSPDDouble(matrix, rhs)
     }
 
     /// Solves an SPD system from a Cholesky factorization.
-    public static func solveSPD(_ matrix: Matrix<Float>, _ rhs: Matrix<Float>) throws -> Matrix<Float> {
+    static func solveSPD(_ matrix: Matrix<Float>, _ rhs: Matrix<Float>) throws -> Matrix<Float> {
         try solveSPDFloat(matrix, rhs)
     }
 
     /// Computes a singular value decomposition with `gesdd`.
-    public static func svd(_ matrix: Matrix<Double>, fullVectors: Bool = false) throws -> LAPACKSVDResult<Double> {
+    static func svd(_ matrix: Matrix<Double>, fullVectors: Bool = false) throws -> LAPACKSVDResult<Double> {
         try svdDouble(matrix, fullVectors: fullVectors)
     }
 
     /// Computes a singular value decomposition with `gesdd`.
-    public static func svd(_ matrix: Matrix<Float>, fullVectors: Bool = false) throws -> LAPACKSVDResult<Float> {
+    static func svd(_ matrix: Matrix<Float>, fullVectors: Bool = false) throws -> LAPACKSVDResult<Float> {
         try svdFloat(matrix, fullVectors: fullVectors)
     }
 
     /// Computes eigenvalues and eigenvectors of a real symmetric matrix.
-    public static func symmetricEigen(_ matrix: Matrix<Double>) throws -> LAPACKSymmetricEigenResult<Double> {
+    static func symmetricEigen(_ matrix: Matrix<Double>) throws -> LAPACKSymmetricEigenResult<Double> {
         try symmetricEigenDouble(matrix)
     }
 
     /// Computes eigenvalues and eigenvectors of a real symmetric matrix.
-    public static func symmetricEigen(_ matrix: Matrix<Float>) throws -> LAPACKSymmetricEigenResult<Float> {
+    static func symmetricEigen(_ matrix: Matrix<Float>) throws -> LAPACKSymmetricEigenResult<Float> {
         try symmetricEigenFloat(matrix)
     }
 
     /// Computes eigenvalues and right eigenvectors of a real general matrix.
-    public static func eigen(_ matrix: Matrix<Double>) throws -> LAPACKGeneralEigenResult<Double> {
+    static func eigen(_ matrix: Matrix<Double>) throws -> LAPACKGeneralEigenResult<Double> {
         try eigenDouble(matrix)
     }
 
     /// Computes eigenvalues and right eigenvectors of a real general matrix.
-    public static func eigen(_ matrix: Matrix<Float>) throws -> LAPACKGeneralEigenResult<Float> {
+    static func eigen(_ matrix: Matrix<Float>) throws -> LAPACKGeneralEigenResult<Float> {
         try eigenFloat(matrix)
     }
 
     /// Solves the ordinary least-squares problem `min_x ||A x - b||_2`.
-    public static func leastSquares(_ matrix: Matrix<Double>, _ b: Vector<Double>) throws -> Vector<Double> {
+    static func leastSquares(_ matrix: Matrix<Double>, _ b: Vector<Double>) throws -> Vector<Double> {
         try leastSquaresDouble(matrix, b)
     }
 
     /// Solves the ordinary least-squares problem `min_x ||A x - b||_2`.
-    public static func leastSquares(_ matrix: Matrix<Float>, _ b: Vector<Float>) throws -> Vector<Float> {
+    static func leastSquares(_ matrix: Matrix<Float>, _ b: Vector<Float>) throws -> Vector<Float> {
         try leastSquaresFloat(matrix, b)
     }
 
     /// Computes a matrix norm with LAPACK's scaled norm kernels.
-    public static func norm(_ matrix: Matrix<Double>, kind: LAPACKMatrixNorm) -> Double {
+    static func norm(_ matrix: Matrix<Double>, kind: LAPACKMatrixNorm) -> Double {
         normDouble(matrix, kind: kind)
     }
 
     /// Computes a matrix norm with LAPACK's scaled norm kernels.
-    public static func norm(_ matrix: Matrix<Float>, kind: LAPACKMatrixNorm) -> Float {
+    static func norm(_ matrix: Matrix<Float>, kind: LAPACKMatrixNorm) -> Float {
         normFloat(matrix, kind: kind)
     }
 
     /// Balances a square matrix with LAPACK `gebal`.
-    public static func balance(_ matrix: Matrix<Double>) throws -> (balanced: Matrix<Double>, scales: Vector<Double>) {
+    static func balance(_ matrix: Matrix<Double>) throws -> (balanced: Matrix<Double>, scales: Vector<Double>) {
         try balanceDouble(matrix)
     }
 
     /// Balances a square matrix with LAPACK `gebal`.
-    public static func balance(_ matrix: Matrix<Float>) throws -> (balanced: Matrix<Float>, scales: Vector<Float>) {
+    static func balance(_ matrix: Matrix<Float>) throws -> (balanced: Matrix<Float>, scales: Vector<Float>) {
         try balanceFloat(matrix)
     }
 }
 
 /// Matrix norm selectors supported by LAPACK `lange`.
-public enum LAPACKMatrixNorm: Sendable {
+enum LAPACKMatrixNorm: Sendable {
     /// Maximum absolute column sum.
     case one
 

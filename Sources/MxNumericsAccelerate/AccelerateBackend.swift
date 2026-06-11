@@ -4,28 +4,26 @@
 //
 //  Created by Alexandro Sanchez on 6/9/26.
 //
-import Accelerate
-import MxNumericsBackend
-import MxNumericsCore
+internal import Accelerate
 
 /// The Accelerate-backed CPU backend.
 ///
 /// This target is the integration point for Apple's BLAS, LAPACK, and vDSP
 /// routines. GEMM is backed by CBLAS for `Double` and `Float`, with the
 /// reference backend retained for unsupported scalar types.
-public struct AccelerateBackend: LinearAlgebraBackend {
+struct AccelerateBackend: LinearAlgebraBackend {
     /// The backend identifier.
-    public static let id = BackendID.accelerate
+    static let id = BackendID.accelerate
 
     /// Creates an Accelerate backend.
-    public init() {}
+    init() {}
 
     /// Returns whether Accelerate is intended to support the operation.
     ///
     /// Double and Float matrix products and factorizations are native
     /// Accelerate paths. Float16 is eligible through promotion to Float and
     /// demotion back to Float16.
-    public static func supports<S: MatrixScalar>(_ op: BackendOperation, scalar: S.Type) -> Bool {
+    static func supports<S: MatrixScalar>(_ op: BackendOperation, scalar: S.Type) -> Bool {
         switch op {
         case .gemm, .elementwise, .reduction, .lu, .qr, .svd, .eig, .cholesky:
             return scalar == Double.self || scalar == Float.self || scalar == Float16.self
@@ -37,7 +35,7 @@ public struct AccelerateBackend: LinearAlgebraBackend {
     /// This method calls the row-major CBLAS GEMM family for `Double` and
     /// `Float`, promotes `Float16` through `Float`, and delegates to
     /// ``ReferenceBackend/gemm(_:_:)`` otherwise.
-    public func gemm<S: MatrixScalar>(_ a: BufferRef<S>, _ b: BufferRef<S>) async throws -> BufferRef<S> {
+    func gemm<S: MatrixScalar>(_ a: BufferRef<S>, _ b: BufferRef<S>) async throws -> BufferRef<S> {
         if S.self == Double.self {
             let left = try Matrix<Double>(rowMajor: a.elements.map { $0 as! Double }, rows: a.rows, columns: a.columns)
             let right = try Matrix<Double>(rowMajor: b.elements.map { $0 as! Double }, rows: b.rows, columns: b.columns)
@@ -64,7 +62,7 @@ public struct AccelerateBackend: LinearAlgebraBackend {
 }
 
 /// Runtime availability information for Accelerate.
-public enum AccelerateAvailability {
+enum AccelerateAvailability {
     /// A Boolean value indicating whether the Accelerate framework is linked.
-    public static var isAvailable: Bool { true }
+    static var isAvailable: Bool { true }
 }

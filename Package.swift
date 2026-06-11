@@ -25,54 +25,23 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "MxNumericsCore",
+            name: "MxNumerics",
             dependencies: [
                 .product(name: "ComplexModule", package: "swift-numerics"),
                 .product(name: "RealModule", package: "swift-numerics"),
             ],
-            swiftSettings: swift6Settings
-        ),
-        .target(
-            name: "MxNumericsBackend",
-            dependencies: ["MxNumericsCore"],
-            swiftSettings: swift6Settings
-        ),
-        .target(
-            name: "MxNumericsAccelerate",
-            dependencies: ["MxNumericsCore", "MxNumericsBackend"],
+            path: "Sources",
             cSettings: accelerateCSettings,
             swiftSettings: swift6Settings,
             linkerSettings: [.linkedFramework("Accelerate")]
         ),
-        .target(
-            name: "MxNumericsMLX",
-            dependencies: ["MxNumericsCore", "MxNumericsBackend"],
-            swiftSettings: swift6Settings
-        ),
-        .target(
-            name: "MxNumerics",
-            dependencies: [
-                "MxNumericsCore",
-                "MxNumericsBackend",
-                "MxNumericsAccelerate",
-                "MxNumericsMLX",
-                .product(name: "ComplexModule", package: "swift-numerics"),
-            ],
-            swiftSettings: swift6Settings
-        ),
-        .testTarget(
-            name: "MxNumericsCoreTests",
-            dependencies: ["MxNumericsCore"],
-            swiftSettings: swift6Settings
-        ),
-        .testTarget(
-            name: "MxNumericsBackendTests",
-            dependencies: ["MxNumericsBackend", "MxNumericsAccelerate"],
-            swiftSettings: swift6Settings
-        ),
         .testTarget(
             name: "MxNumericsTests",
-            dependencies: ["MxNumerics"],
+            dependencies: [
+                "MxNumerics",
+                .product(name: "ComplexModule", package: "swift-numerics"),
+            ],
+            path: "Tests",
             swiftSettings: swift6Settings
         ),
     ],

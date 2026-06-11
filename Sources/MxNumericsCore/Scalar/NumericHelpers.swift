@@ -4,7 +4,7 @@
 //
 //  Created by Alexandro Sanchez on 6/9/26.
 //
-import Foundation
+internal import Foundation
 
 /// Returns the square of a scalar value.
 ///

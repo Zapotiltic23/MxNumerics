@@ -21,16 +21,15 @@ The framework uses the following numerical conventions:
 - Public ``norm(_:_:)`` routines use Accelerate for supported real
   floating-point scalars. Low-level ``Matrix/frobeniusNorm`` and
   ``Vector/norm`` remain portable direct-sum helpers.
-- ``MxNumerics/deterministicMode`` forces CPU routing decisions for regression
-  stability.
+- ``MxNumericsRuntime/deterministicMode`` forces CPU routing decisions for
+  regression stability.
 
-The backend layer is intentionally separated from the public matrix API.
-``ReferenceBackend`` is a portable correctness backend. ``AccelerateBackend`` is
-the CPU integration point for BLAS/LAPACK/vDSP shims. ``MLXBackend`` is the GPU
-integration point for Float and Float16 bulk kernels. The umbrella routine
-catalog calls synchronous Accelerate kernels for `Double` and `Float`, promotes
-`Float16` through `Float` where appropriate, and keeps Swift reference fallbacks
-for unsupported scalar families.
+The backend layer is intentionally separated from the public matrix API. Public
+code configures routing through ``MxNumericsRuntime`` and can inspect decisions
+with ``Matrix/backendDecision(for:)``. The umbrella routine catalog calls
+synchronous Accelerate kernels for `Double` and `Float`, promotes `Float16`
+through `Float` where appropriate, and keeps Swift reference fallbacks for
+unsupported scalar families.
 
 The Accelerate target uses row-major CBLAS/vDSP calls and a centralized
 column-major LAPACK bridge. Current Apple SDKs may still report deprecation
@@ -67,7 +66,6 @@ local 32-bit LAPACK integer ABI to match the imported symbols reliably.
 
 - ``qr(_:)``
 - ``gramSchmidtFactorization(_:mode:)``
-- ``gramSmchmidtFactorization(_:)``
 - ``householderVector(_:)``
 - ``luDecompositionDoolittle(_:)``
 - ``luWithScaledRowPivoting(_:)``
@@ -132,19 +130,14 @@ local 32-bit LAPACK integer ABI to match the imported symbols reliably.
 - ``sqrtComplex(_:)``
 - ``realToComplex(_:)``
 
-### Backend Routing
+### Runtime Configuration
 
-- ``MxNumerics``
+- ``MxNumericsRuntime``
+- ``RuntimeConfiguration``
 - ``BackendID``
 - ``BackendOperation``
 - ``BackendPolicy``
-- ``BackendRouter``
 - ``DispatchDecision``
-- ``LinearAlgebraBackend``
-- ``BufferRef``
-- ``ReferenceBackend``
-- ``AccelerateBackend``
-- ``MLXBackend``
 
 ## Numerical References
 

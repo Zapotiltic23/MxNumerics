@@ -4,9 +4,9 @@
 //
 //  Created by Alexandro Sanchez on 6/9/26.
 //
-import ComplexModule
-import Foundation
-import RealModule
+public import ComplexModule
+internal import Foundation
+public import RealModule
 
 /// A scalar that can be stored in a matrix.
 ///

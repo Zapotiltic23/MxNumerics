@@ -4,7 +4,6 @@
 //
 //  Created by Alexandro Sanchez on 6/9/26.
 //
-import MxNumericsCore
 
 /// A portable Swift backend used as a correctness reference.
 ///
@@ -12,17 +11,17 @@ import MxNumericsCore
 /// performance. Its GEMM implementation splits work by output row with Swift
 /// task groups, which makes it useful for testing async backend contracts while
 /// staying independent of Accelerate and MLX.
-public struct ReferenceBackend: LinearAlgebraBackend {
+struct ReferenceBackend: LinearAlgebraBackend {
     /// The backend identifier.
-    public static let id = BackendID.reference
+    static let id = BackendID.reference
 
     /// Creates a reference backend.
-    public init() {}
+    init() {}
 
     /// Returns whether the reference backend supports an operation.
     ///
     /// The current implementation supports GEMM.
-    public static func supports<S: MatrixScalar>(_ op: BackendOperation, scalar: S.Type) -> Bool {
+    static func supports<S: MatrixScalar>(_ op: BackendOperation, scalar: S.Type) -> Bool {
         op == .gemm
     }
 
@@ -38,7 +37,7 @@ public struct ReferenceBackend: LinearAlgebraBackend {
     ///   - b: The right matrix buffer.
     /// - Returns: A row-major buffer containing the matrix product.
     /// - Throws: ``LinAlgError/dimensionMismatch(_:)`` when `a.columns != b.rows`.
-    public func gemm<S: MatrixScalar>(
+    func gemm<S: MatrixScalar>(
         _ a: BufferRef<S>,
         _ b: BufferRef<S>
     ) async throws -> BufferRef<S> {

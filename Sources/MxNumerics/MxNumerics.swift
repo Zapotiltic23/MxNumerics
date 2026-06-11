@@ -4,18 +4,23 @@
 //
 //  Created by Alexandro Sanchez on 6/9/26.
 //
-@_exported import MxNumericsBackend
-@_exported import MxNumericsCore
+internal import os
 
-import MxNumericsMLX
-import os
+/// A concurrency-safe snapshot of the current runtime configuration.
+public struct RuntimeConfiguration: Sendable, Equatable {
+    /// A Boolean value that forces deterministic CPU backend routing.
+    public let deterministicMode: Bool
+
+    /// The global backend selection policy.
+    public let backendPolicy: BackendPolicy
+}
 
 /// Global runtime controls for MxNumerics.
 ///
 /// Use this namespace to configure backend policy for operations that route
 /// through the umbrella module. The stored state is protected by an unfair lock
 /// so synchronous callers can read and update it safely under Swift concurrency.
-public enum MxNumerics {
+public enum MxNumericsRuntime {
     private struct RuntimeState: Sendable {
         var deterministicMode = false
         var backendPolicy = BackendPolicy.auto
@@ -38,11 +43,18 @@ public enum MxNumerics {
         set { state.withLock { $0.backendPolicy = newValue } }
     }
 
-    /// Creates a router snapshot from the current global runtime state.
-    ///
-    /// - Returns: A ``BackendRouter`` initialized with the current policy,
-    ///   deterministic-mode flag, and MLX availability.
-    public static func router() -> BackendRouter {
+    /// Returns an immutable snapshot of the current runtime configuration.
+    public static var configuration: RuntimeConfiguration {
+        state.withLock {
+            RuntimeConfiguration(
+                deterministicMode: $0.deterministicMode,
+                backendPolicy: $0.backendPolicy
+            )
+        }
+    }
+
+    /// Creates an internal router snapshot from the current runtime state.
+    static func router() -> BackendRouter {
         state.withLock {
             BackendRouter(
                 policy: $0.backendPolicy,
@@ -62,14 +74,13 @@ extension Matrix {
     /// - Parameter operation: The primitive operation to route.
     /// - Returns: The selected backend and a reason string.
     public func backendDecision(for operation: BackendOperation) -> DispatchDecision {
-        MxNumerics.router().choose(op: operation, scalar: Scalar.self, rows: rows, columns: columns)
+        MxNumericsRuntime.router().choose(op: operation, scalar: Scalar.self, rows: rows, columns: columns)
     }
 
     /// Multiplies this matrix by another matrix using the async reference backend.
     ///
-    /// The operation computes the standard matrix product. It currently calls
-    /// ``ReferenceBackend`` directly, so it is useful for validating async
-    /// backend behavior but is not yet the optimized public multiply path.
+    /// The operation computes the standard matrix product through the library's
+    /// structured-concurrency execution path.
     ///
     /// - Parameter other: The right-hand matrix.
     /// - Returns: The product `self * other`.

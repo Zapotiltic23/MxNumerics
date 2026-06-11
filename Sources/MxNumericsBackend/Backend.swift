@@ -4,11 +4,10 @@
 //
 //  Created by Alexandro Sanchez on 6/9/26.
 //
-import MxNumericsCore
 
 /// Identifies a linear algebra backend.
 ///
-/// Backends are implementation choices, not public mathematical semantics. The
+/// Backends are implementation choices, not mathematical semantics. The
 /// same operation should return results that agree within documented numerical
 /// tolerances even when different backends are selected.
 public enum BackendID: String, Sendable {
@@ -52,17 +51,17 @@ public enum BackendOperation: Hashable, Sendable {
 /// A contiguous row-major buffer passed between core values and backends.
 ///
 /// `BufferRef` deliberately contains plain Swift storage rather than backend
-/// objects. That keeps the public API independent from Accelerate, MLX, and any
+/// objects. That keeps the API independent from Accelerate, MLX, and any
 /// future backend-specific types.
-public struct BufferRef<Scalar: MatrixScalar>: Sendable {
+struct BufferRef<Scalar: MatrixScalar>: Sendable {
     /// Row-major scalar storage.
-    public let elements: [Scalar]
+    let elements: [Scalar]
 
     /// The row count.
-    public let rows: Int
+    let rows: Int
 
     /// The column count.
-    public let columns: Int
+    let columns: Int
 
     /// Creates a buffer reference from row-major storage.
     ///
@@ -72,7 +71,7 @@ public struct BufferRef<Scalar: MatrixScalar>: Sendable {
     ///   - columns: The column count.
     /// - Throws: ``LinAlgError/invalidShape(rows:columns:)`` if the dimensions
     ///   are negative or do not match the element count.
-    public init(elements: [Scalar], rows: Int, columns: Int) throws {
+    init(elements: [Scalar], rows: Int, columns: Int) throws {
         guard rows >= 0, columns >= 0, rows * columns == elements.count else {
             throw LinAlgError.invalidShape(rows: rows, columns: columns)
         }
@@ -82,14 +81,14 @@ public struct BufferRef<Scalar: MatrixScalar>: Sendable {
     }
 
     /// Creates a buffer reference by materializing a matrix in logical row-major order.
-    public init(_ matrix: Matrix<Scalar>) {
+    init(_ matrix: Matrix<Scalar>) {
         self.elements = matrix.rowMajorElements()
         self.rows = matrix.rows
         self.columns = matrix.columns
     }
 
     /// Converts this buffer reference back into a matrix.
-    public func matrix() -> Matrix<Scalar> {
+    func matrix() -> Matrix<Scalar> {
         try! Matrix(rowMajor: elements, rows: rows, columns: columns)
     }
 }
@@ -100,7 +99,7 @@ public struct BufferRef<Scalar: MatrixScalar>: Sendable {
 /// operation and scalar type. Implementations may dispatch to CPU, GPU, or
 /// reference kernels, but must preserve the mathematical contract of each
 /// primitive.
-public protocol LinearAlgebraBackend: Sendable {
+protocol LinearAlgebraBackend: Sendable {
     /// The backend identifier.
     static var id: BackendID { get }
 

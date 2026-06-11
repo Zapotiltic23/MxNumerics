@@ -156,7 +156,7 @@ struct NumericalRoutinesTests {
 
         _ = try luDecompositionDoolittle(a)
         _ = try croutsLUwithPartialImplicitPivoting(a)
-        _ = gramSmchmidtFactorization(a)
+        _ = gramSchmidtFactorization(a)
         _ = balanceMatrix(a)
         #expect(isUpperHessenberg(upperHessenberg(a)))
         _ = francisQRStep(a)
@@ -181,7 +181,7 @@ struct NumericalRoutinesTests {
         #expect(norm(a, .infinity) == 3)
         #expect(conditionNumber(a) > 1)
         _ = fundamentalSubspaces(a)
-        _ = fundemantalSubspaces(a)
+        _ = fundamentalSubspaces(a)
         _ = solveSystemPseudoInverse(a, b)
         _ = try solveSystemOrdinaryLeastSquares(a, b)
         _ = try solveSystemIterativelyReweightedLeastSquares(a, b, maxIterations: 2)
