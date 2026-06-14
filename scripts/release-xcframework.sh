@@ -2,7 +2,7 @@
 set -euo pipefail
 
 VERSION="${1:-1.0.0}"
-ARTIFACT_BASE_URL="${2:-https://example.com/MxNumerics/releases/download/${VERSION}}"
+ARTIFACT_BASE_URL="${2:-https://github.com/Zapotiltic23/MxNumericsBinary/releases/download/${VERSION}}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/.build/binary-release/${VERSION}"
 ARCHIVE_DIR="${BUILD_DIR}/archives"

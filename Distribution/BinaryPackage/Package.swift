@@ -25,8 +25,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "MxNumerics",
-            url: "https://example.com/MxNumerics/releases/download/1.0.0/MxNumerics-1.0.0.xcframework.zip",
-            checksum: "0000000000000000000000000000000000000000000000000000000000000000"
+            url: "https://github.com/Zapotiltic23/MxNumericsBinary/releases/download/1.0.0/MxNumerics-1.0.0.xcframework.zip",
+            checksum: "f5b000c769892223957af272659abeba6f0c3d2977d1657ac293181858f695ac"
         ),
         .target(
             name: "MxNumericsDependencyShim",
